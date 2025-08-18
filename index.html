@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frequency Frontier</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="ui">
+            <h1>Frequency Frontier</h1>
+            <div id="controls">
+                <button id="startBtn">Start Game</button>
+                <button id="uploadBtn">Upload Music</button>
+                <input type="file" id="musicInput" accept="audio/*" style="display: none;">
+            </div>
+            <div id="gameInfo">
+                <div>Score: <span id="score">0</span></div>
+                <div>Frequency: <span id="frequency">440Hz</span></div>
+                <div>Health: <span id="health">100</span></div>
+            </div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div id="frequencyDisplay"></div>
+    </div>
+
+    <!-- Audio visualization canvas -->
+    <canvas id="visualizer" style="position: absolute; top: 0; left: 0; pointer-events: none; opacity: 0.3;"></canvas>
+
+    <!-- Load external libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    
+    <!-- Game modules -->
+    <script src="js/audioProcessor.js"></script>
+    <script src="js/gameWorld.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>

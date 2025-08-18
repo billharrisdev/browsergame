@@ -1,0 +1,23 @@
+{
+  "name": "frequency-frontier",
+  "version": "1.0.0",
+  "description": "A musical exploration game where you play as a sound wave navigating through a spectrum analyzer landscape",
+  "main": "index.html",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "dev": "python3 -m http.server 8000",
+    "serve": "python3 -m http.server 8000"
+  },
+  "keywords": [
+    "game",
+    "audio",
+    "visualization",
+    "webgl",
+    "pixi.js",
+    "web-audio-api"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {}
+}
