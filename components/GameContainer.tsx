@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import GameCanvas from './GameCanvas'
 import GameUI from './GameUI'
-import { FrequencyFrontierGame } from '../lib/game-engine/game'
+import { FrequencyFrontierGame } from '../lib/game-engine'
 
 export default function GameContainer() {
   const [gameState, setGameState] = useState<'menu' | 'playing' | 'paused' | 'gameOver'>('menu')

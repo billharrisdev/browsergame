@@ -6,7 +6,7 @@
             "dom.iterable",
             "es6"
         ],
-        "allowJs": true,
+    "allowJs": false,
         "skipLibCheck": true,
         "strict": false,
         "forceConsistentCasingInFileNames": true,
@@ -36,6 +36,7 @@
         ".next/types/**/*.ts"
     ],
     "exclude": [
-        "node_modules"
+        "node_modules",
+        "lib/game-engine/game.js"
     ]
 }

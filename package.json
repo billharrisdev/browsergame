@@ -25,12 +25,12 @@
     "type": "git",
     "url": "git+https://github.com/billharrisdev/browsergame.git"
   },
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/billharrisdev/browsergame/issues"
   },
   "homepage": "https://github.com/billharrisdev/browsergame#readme",
   "dependencies": {
+    "@tailwindcss/postcss": "^4.1.12",
     "@types/node": "^24.3.0",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
@@ -40,6 +40,7 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "tailwindcss": "^4.1.12",
+    "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.9.2"
   }
 }

@@ -1,59 +1,35 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-@layer base {
-  html {
-    @apply dark;
-  }
-  
-  body {
-    @apply bg-gray-900 text-white overflow-hidden;
-    font-family: 'Arial', sans-serif;
-  }
+@theme {
+  --color-bass: #ff3333;
+  --color-mid: #33ff33;
+  --color-high: #3333ff;
+  --color-neon-cyan: #00ffff;
+  --color-neon-pink: #ff00ff;
+  --color-neon-blue: #0080ff;
+
+  --animate-pulse-glow: pulse-glow 2s infinite;
+  --animate-frequency-wave: frequency-wave 3s ease-in-out infinite;
 }
 
-@layer components {
-  .game-button {
-    @apply px-6 py-3 font-bold border-none rounded-full cursor-pointer transition-all duration-300;
-    @apply bg-gradient-to-r from-neon-cyan to-neon-blue text-white;
-    @apply shadow-lg hover:shadow-neon-cyan/50 hover:-translate-y-0.5;
-    @apply active:translate-y-0;
-  }
-  
-  .frequency-display {
-    @apply bg-black/80 border-2 border-neon-cyan rounded-full;
-    @apply flex items-center justify-center font-bold text-xl;
-    @apply backdrop-blur-md shadow-lg;
-  }
-  
-  .ui-panel {
-    @apply bg-black/70 backdrop-blur-lg border-b-2 border-neon-cyan;
-  }
-  
-  .game-info-item {
-    @apply px-4 py-2 bg-white/10 rounded-full border border-neon-cyan/30;
-  }
-  
-  .spectrum-bar {
-    @apply transition-all duration-75 ease-out;
-  }
-}
+@keyframes pulse-glow { 0%,100% { box-shadow:0 0 5px rgba(0,255,255,.5) } 50% { box-shadow:0 0 20px rgba(0,255,255,.8) } }
+@keyframes frequency-wave { 0%,100% { transform:scaleY(1) } 50% { transform:scaleY(1.5) } }
 
-@layer utilities {
-  .text-gradient-neon {
-    background: linear-gradient(45deg, #00ffff, #ff00ff);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-  
-  .glow-neon-cyan {
-    text-shadow: 0 0 10px #00ffff;
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
-  }
-  
-  .animate-pulse-glow {
-    animation: pulse-glow 2s infinite;
-  }
-}
+html { color-scheme: dark; }
+body { background:#0f172a; color:#fff; overflow:hidden; font-family:Arial, sans-serif; }
+
+.game-button { padding:1.25rem 1.5rem; font-weight:700; border:none; border-radius:9999px; cursor:pointer; transition:.3s; background:linear-gradient(to right,var(--color-neon-cyan),var(--color-neon-blue)); color:#fff; box-shadow:0 10px 15px -3px rgba(0,0,0,.35); }
+.game-button:hover { transform:translateY(-2px); box-shadow:0 0 18px rgba(0,255,255,.55); }
+.game-button:active { transform:translateY(0); }
+
+.frequency-display { background:rgba(0,0,0,.8); border:2px solid var(--color-neon-cyan); border-radius:9999px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.25rem; backdrop-filter:blur(12px); box-shadow:0 10px 15px -3px rgba(0,0,0,.35); }
+.ui-panel { background:rgba(0,0,0,.7); backdrop-filter:blur(24px); border-bottom:2px solid var(--color-neon-cyan); }
+.game-info-item { padding:.5rem 1rem; background:rgba(255,255,255,.1); border-radius:9999px; border:1px solid rgba(0,255,255,.3); }
+.spectrum-bar { transition:all 75ms ease-out; }
+
+.text-gradient-neon { background:linear-gradient(45deg,#00ffff,#ff00ff); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+.glow-neon-cyan { text-shadow:0 0 10px #00ffff; box-shadow:0 0 20px rgba(0,255,255,.5); }
+.animate-pulse-glow { animation:var(--animate-pulse-glow); }
+
+.text-bass { color:var(--color-bass); } .text-mid { color:var(--color-mid); } .text-high { color:var(--color-high); }
+.bg-bass { background:var(--color-bass); } .bg-mid { background:var(--color-mid); } .bg-high { background:var(--color-high); }
