@@ -1,29 +1,29 @@
-class AudioProcessor {
-    constructor() {
-        this.audioContext = null;
-        this.analyzer = null;
-        this.microphone = null;
-        this.dataArray = null;
-        this.bufferLength = 0;
-        this.isInitialized = false;
-        this.currentFrequency = 440; // Default frequency
-        this.frequencyData = [];
-        this.bassLevel = 0;
-        this.midLevel = 0;
-        this.highLevel = 0;
-    }
+export class AudioProcessor {
+    public audioContext: any = null
+    public analyzer: any = null
+    public microphone: any = null
+    public dataArray: Float32Array | null = null
+    public bufferLength: number = 0
+    public isInitialized: boolean = false
+    public currentFrequency: number = 440 // Default frequency
+    public frequencyData: number[] = []
+    public bassLevel: number = 0
+    public midLevel: number = 0
+    public highLevel: number = 0
+    public player: any = null
+    public freqAnalyzer: any = null
 
     async initialize() {
         try {
             // Initialize Tone.js audio context
-            await Tone.start();
-            this.audioContext = Tone.context;
+            await (window as any).Tone.start();
+            this.audioContext = (window as any).Tone.context;
             
             // Create analyzer node
-            this.analyzer = new Tone.Analyser("fft", 1024);
+            this.analyzer = new (window as any).Tone.Analyser("fft", 1024);
             
             // Create frequency analyzer for pitch detection
-            this.freqAnalyzer = new Tone.Analyser("waveform", 1024);
+            this.freqAnalyzer = new (window as any).Tone.Analyser("waveform", 1024);
             
             this.bufferLength = this.analyzer.size;
             this.dataArray = new Float32Array(this.bufferLength);
@@ -39,7 +39,7 @@ class AudioProcessor {
     async startMicrophone() {
         try {
             // Get microphone input
-            this.microphone = new Tone.UserMedia();
+            this.microphone = new (window as any).Tone.UserMedia();
             await this.microphone.open();
             
             // Connect microphone to analyzers
@@ -60,7 +60,7 @@ class AudioProcessor {
             const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
             
             // Create player for the audio file
-            this.player = new Tone.Player({
+            this.player = new (window as any).Tone.Player({
                 url: audioBuffer,
                 loop: true,
                 autostart: false

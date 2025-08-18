@@ -1,5 +1,28 @@
-class GameWorld {
-    constructor(app, audioProcessor) {
+export class GameWorld {
+    public app: any
+    public audioProcessor: any
+    
+    // World properties
+    public platforms: any[] = []
+    public obstacles: any[] = []
+    public collectibles: any[] = []
+    public particles: any[] = []
+    
+    // Visual layers
+    public backgroundLayer: any
+    public platformLayer: any
+    public obstacleLayer: any
+    public collectibleLayer: any
+    public particleLayer: any
+    
+    // World generation
+    public nextPlatformTime: number = 0
+    public nextObstacleTime: number = 0
+    public nextCollectibleTime: number = 0
+    
+    public backgroundGraphics: any
+
+    constructor(app: any, audioProcessor: any) {
         this.app = app;
         this.audioProcessor = audioProcessor;
         
@@ -10,11 +33,11 @@ class GameWorld {
         this.particles = [];
         
         // Visual layers
-        this.backgroundLayer = new PIXI.Container();
-        this.platformLayer = new PIXI.Container();
-        this.obstacleLayer = new PIXI.Container();
-        this.collectibleLayer = new PIXI.Container();
-        this.particleLayer = new PIXI.Container();
+        this.backgroundLayer = new (window as any).PIXI.Container();
+        this.platformLayer = new (window as any).PIXI.Container();
+        this.obstacleLayer = new (window as any).PIXI.Container();
+        this.collectibleLayer = new (window as any).PIXI.Container();
+        this.particleLayer = new (window as any).PIXI.Container();
         
         // Add layers to stage
         this.app.stage.addChild(this.backgroundLayer);
@@ -33,7 +56,7 @@ class GameWorld {
 
     createBackground() {
         // Create animated background based on audio visualization
-        this.backgroundGraphics = new PIXI.Graphics();
+        this.backgroundGraphics = new (window as any).PIXI.Graphics();
         this.backgroundLayer.addChild(this.backgroundGraphics);
         
         // Create grid pattern
@@ -42,7 +65,7 @@ class GameWorld {
 
     createGrid() {
         const gridSize = 50;
-        const gridGraphics = new PIXI.Graphics();
+        const gridGraphics = new (window as any).PIXI.Graphics();
         
         gridGraphics.lineStyle(1, 0x333366, 0.3);
         
@@ -130,7 +153,7 @@ class GameWorld {
 
     createPlatform(intensity) {
         const platform = {
-            graphics: new PIXI.Graphics(),
+            graphics: new (window as any).PIXI.Graphics(),
             x: this.app.screen.width + 50,
             y: Math.random() * (this.app.screen.height - 200) + 100,
             width: 100 + intensity * 100,
@@ -152,7 +175,7 @@ class GameWorld {
 
     createObstacle(intensity) {
         const obstacle = {
-            graphics: new PIXI.Graphics(),
+            graphics: new (window as any).PIXI.Graphics(),
             x: this.app.screen.width + 50,
             y: Math.random() * (this.app.screen.height - 200) + 100,
             radius: 15 + intensity * 20,
@@ -187,7 +210,7 @@ class GameWorld {
 
     createCollectible(intensity) {
         const collectible = {
-            graphics: new PIXI.Graphics(),
+            graphics: new (window as any).PIXI.Graphics(),
             x: this.app.screen.width + 50,
             y: Math.random() * (this.app.screen.height - 200) + 100,
             radius: 8 + intensity * 12,
@@ -203,7 +226,7 @@ class GameWorld {
         collectible.graphics.endFill();
         
         // Add glow effect
-        const glowFilter = new PIXI.filters.GlowFilter({
+        const glowFilter = new (window as any).PIXI.filters.GlowFilter({
             distance: 15,
             outerStrength: 2,
             color: 0x00ffff
@@ -293,7 +316,7 @@ class GameWorld {
     createParticleExplosion(x, y, color, count = 10) {
         for (let i = 0; i < count; i++) {
             const particle = {
-                graphics: new PIXI.Graphics(),
+                graphics: new (window as any).PIXI.Graphics(),
                 x: x,
                 y: y,
                 vx: (Math.random() - 0.5) * 10,

@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply dark;
+  }
+  
+  body {
+    @apply bg-gray-900 text-white overflow-hidden;
+    font-family: 'Arial', sans-serif;
+  }
+}
+
+@layer components {
+  .game-button {
+    @apply px-6 py-3 font-bold border-none rounded-full cursor-pointer transition-all duration-300;
+    @apply bg-gradient-to-r from-neon-cyan to-neon-blue text-white;
+    @apply shadow-lg hover:shadow-neon-cyan/50 hover:-translate-y-0.5;
+    @apply active:translate-y-0;
+  }
+  
+  .frequency-display {
+    @apply bg-black/80 border-2 border-neon-cyan rounded-full;
+    @apply flex items-center justify-center font-bold text-xl;
+    @apply backdrop-blur-md shadow-lg;
+  }
+  
+  .ui-panel {
+    @apply bg-black/70 backdrop-blur-lg border-b-2 border-neon-cyan;
+  }
+  
+  .game-info-item {
+    @apply px-4 py-2 bg-white/10 rounded-full border border-neon-cyan/30;
+  }
+  
+  .spectrum-bar {
+    @apply transition-all duration-75 ease-out;
+  }
+}
+
+@layer utilities {
+  .text-gradient-neon {
+    background: linear-gradient(45deg, #00ffff, #ff00ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  .glow-neon-cyan {
+    text-shadow: 0 0 10px #00ffff;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+  }
+  
+  .animate-pulse-glow {
+    animation: pulse-glow 2s infinite;
+  }
+}

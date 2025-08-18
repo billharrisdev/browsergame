@@ -2,11 +2,12 @@
   "name": "frequency-frontier",
   "version": "1.0.0",
   "description": "A musical exploration game where you play as a sound wave navigating through a spectrum analyzer landscape",
-  "main": "index.html",
+  "main": "index.js",
   "scripts": {
-    "start": "python3 -m http.server 8000",
-    "dev": "python3 -m http.server 8000",
-    "serve": "python3 -m http.server 8000"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
   "keywords": [
     "game",
@@ -14,10 +15,31 @@
     "visualization",
     "webgl",
     "pixi.js",
-    "web-audio-api"
+    "web-audio-api",
+    "nextjs",
+    "tailwindcss"
   ],
   "author": "Your Name",
   "license": "MIT",
-  "dependencies": {},
-  "devDependencies": {}
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/billharrisdev/browsergame.git"
+  },
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/billharrisdev/browsergame/issues"
+  },
+  "homepage": "https://github.com/billharrisdev/browsergame#readme",
+  "dependencies": {
+    "@types/node": "^24.3.0",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "autoprefixer": "^10.4.21",
+    "next": "^15.4.6",
+    "postcss": "^8.5.6",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "tailwindcss": "^4.1.12",
+    "typescript": "^5.9.2"
+  }
 }

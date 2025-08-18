@@ -1,5 +1,32 @@
-class Player {
-    constructor(app, audioProcessor) {
+export class Player {
+    public app: any
+    public audioProcessor: any
+    
+    // Player properties
+    public x: number
+    public y: number
+    public radius: number = 15
+    public speed: number = 5
+    public currentFrequency: number = 440
+    public targetFrequency: number = 440
+    public health: number = 100
+    public score: number = 0
+    
+    // Frequency properties
+    public minFreq: number = 80   // Bass range start
+    public maxFreq: number = 8000 // High range end
+    
+    // Visual properties
+    public trail: Array<{x: number, y: number, alpha: number}> = []
+    public maxTrailLength: number = 20
+    
+    public graphics: any
+    public glowFilter: any
+    public keys: {[key: string]: boolean} = {}
+    public targetX?: number
+    public targetY?: number
+
+    constructor(app: any, audioProcessor: any) {
         this.app = app;
         this.audioProcessor = audioProcessor;
         
@@ -27,12 +54,12 @@ class Player {
 
     createSprite() {
         // Create player graphics
-        this.graphics = new PIXI.Graphics();
+        this.graphics = new (window as any).PIXI.Graphics();
         this.updateGraphics();
         this.app.stage.addChild(this.graphics);
         
         // Create glow effect
-        this.glowFilter = new PIXI.filters.GlowFilter({
+        this.glowFilter = new (window as any).PIXI.filters.GlowFilter({
             distance: 20,
             outerStrength: 2,
             innerStrength: 1,
@@ -209,13 +236,13 @@ class Player {
         // Update health display
         const healthElement = document.getElementById('health');
         if (healthElement) {
-            healthElement.textContent = this.health;
+            healthElement.textContent = this.health.toString();
         }
         
         // Update score display
         const scoreElement = document.getElementById('score');
         if (scoreElement) {
-            scoreElement.textContent = this.score;
+            scoreElement.textContent = this.score.toString();
         }
     }
 
@@ -227,7 +254,7 @@ class Player {
         }
         
         // Visual feedback for damage
-        gsap.to(this.graphics, {
+        (window as any).gsap.to(this.graphics, {
             duration: 0.1,
             alpha: 0.5,
             yoyo: true,
@@ -236,11 +263,11 @@ class Player {
         });
     }
 
-    addScore(points) {
+    addScore(points: number) {
         this.score += points;
         
         // Visual feedback for scoring
-        gsap.to(this.graphics.scale, {
+        (window as any).gsap.to(this.graphics.scale, {
             duration: 0.2,
             x: 1.2,
             y: 1.2,
