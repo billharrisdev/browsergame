@@ -172,7 +172,8 @@ export function timingGrade(errorSeconds: number, window = hitWindow): Judgment 
 }
 
 export function describeTiming(grade: Judgment, errorMs: number | null): string {
-  if (errorMs === null || grade === 'Miss' || grade === 'No target') return grade
+  if (grade === 'Too early' || grade === 'No target') return 'Extra'
+  if (errorMs === null || grade === 'Miss') return grade
   const amount = Math.round(Math.abs(errorMs))
   return `${grade} · ${amount === 0 ? 'on time' : `${amount} ms ${errorMs < 0 ? 'early' : 'late'}`}`
 }

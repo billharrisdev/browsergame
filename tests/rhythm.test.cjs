@@ -10,7 +10,7 @@ require.extensions['.ts'] = (module, filename) => {
 }
 const { analyzeBeats, buildSongChart, makeBeatGrid, makeTempoGrid, beatAccent, beatPosition, controlStick, nearestBeatDistance, paradiddle, timingGrade, timingWindows, describeTiming } = require('../lib/game-engine/rhythm.ts')
 const { songsForLevel, levelsFor } = require('../lib/music/levels.ts')
-const { checkClicks, heardBpm } = require('../lib/game-engine/beatCheck.ts')
+const { beatResiduals, checkClicks, clickPhase, heardBpm } = require('../lib/game-engine/beatCheck.ts')
 const { createTargets, GameWorld } = require('../lib/game-engine/gameWorld.ts')
 const { RunScore } = require('../lib/game-engine/scoring.ts')
 const { AudioProcessor } = require('../lib/game-engine/audioProcessor.ts')
@@ -108,10 +108,15 @@ test('good timing builds combos; inaccurate and empty attempts affect accuracy',
   stats.record('Late', 160)
   assert.equal(stats.combo, 0)
   assert.ok(stats.accuracy < 100)
-  const accuracy = stats.accuracy
+  const beforeExtra = stats.accuracy
+  stats.record('Perfect', 10)
   stats.record('No target', null)
-  assert.ok(stats.accuracy < accuracy)
-  assert.equal(stats.bestCombo, 10)
+  stats.record('Too early', null)
+  assert.equal(stats.combo, 1)
+  assert.ok(stats.accuracy > beforeExtra)
+  stats.record('Perfect', 0)
+  assert.equal(stats.combo, 2)
+  assert.equal(stats.stray, 2)
 })
 
 test('too-early input leaves target hittable; duplicate taps cannot score twice', () => {
@@ -122,8 +127,10 @@ test('too-early input leaves target hittable; duplicate taps cannot score twice'
   assert.equal(target.resolved, false)
   assert.equal(world.hit(target.x, target.y, 2.02, 800, 500, 42).grade, 'Perfect')
   const score = world.stats.score
+  const combo = world.stats.combo
   assert.equal(world.hit(target.x, target.y, 2.03, 800, 500, 42).grade, 'No target')
   assert.equal(world.stats.score, score)
+  assert.equal(world.stats.combo, combo)
   assert.equal(world.stats.counts.Perfect, 1)
 })
 
@@ -358,6 +365,9 @@ test('beat check can compare pulse, half-time, and swing double-time without cha
   assert.equal(swing[0].accent, true)
   assert.equal(swing[1].accent, false)
   assert.deepEqual(beats, [0, 0.5, 1, 1.5])
+  assert.equal(clickPhase([{ time: 1 }, { time: 1.5 }], 1.25).phase, 0.5)
+  assert.equal(beatResiduals([1, 2], [1.01, 2.08])[1].residualMs, 80)
+  assert.equal(beatResiduals([1], [1.4])[0].residualMs, null)
 })
 
 test('level four uses long-short swing eighths and the counter switches at two-thirds', () => {

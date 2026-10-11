@@ -56,7 +56,7 @@ export const initialSnapshot: GameSnapshot = {
 }
 
 export const judgmentColors: Record<Judgment, string> = {
-  Perfect: '#5df3d1', Close: '#8ebfff', Early: '#ffc581', Late: '#e8a3ff', 'Too early': '#ff9c81', Miss: '#ff708d', 'No target': '#ff708d', 'Wrong stick': '#ff708d'
+  Perfect: '#5df3d1', Close: '#8ebfff', Early: '#ffc581', Late: '#e8a3ff',   'Too early': '#9eb4c8', Miss: '#ff708d', 'No target': '#9eb4c8', 'Wrong stick': '#ff708d'
 }
 
 export class FrequencyFrontierGame {
@@ -364,6 +364,7 @@ export class FrequencyFrontierGame {
       ctx.fillStyle = judgmentColors[hit.grade]; ctx.textAlign = 'center'; ctx.font = 'bold 14px monospace'
       ctx.font = `bold ${w <= 680 ? 10 : 13}px monospace`
       const message = hit.grade === 'Wrong stick' ? `Wrong stick: ${hit.expectedHand}`
+        : hit.grade === 'Too early' || hit.grade === 'No target' ? 'Extra'
         : hit.errorMs === null ? hit.grade : `${hit.grade} ${hit.errorMs > 0 ? '+' : ''}${hit.errorMs} ms`
       ctx.fillText(message, Math.max(w <= 680 ? 135 : 160, Math.min(w - (w <= 680 ? 135 : 160), x)), y - field.radius - 30 - age * 20 * motion)
       if (hit.grade !== 'Too early' && hit.grade !== 'No target') {

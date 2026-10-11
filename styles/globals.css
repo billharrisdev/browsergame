@@ -59,10 +59,26 @@ a { color: var(--mint); }
 .preview-button { flex-shrink: 0; width: 32px; height: 32px; border: 1px solid #3b4b63; border-radius: 50%; background: transparent; color: #a6bdd4; font-size: 10px; margin-right: 12px; }
 .preview-button:hover { color: var(--mint); border-color: var(--mint); }
 .check-button { flex-shrink: 0; margin-right: 10px; border: 1px solid #5df3d166; border-radius: 6px; background: transparent; color: var(--mint); font-size: 10px; padding: 6px 8px; }
-.beat-check-card { text-align: left; max-width: 640px; }
+.beat-check { overflow: auto; align-items: flex-start; padding-top: 28px; }
+.beat-check-card { text-align: left; max-width: 760px; width: min(760px, calc(100% - 24px)); }
 .beat-check-card h2 { font-size: 22px; margin: 4px 0 0; }
 .beat-check-readout { display: flex; align-items: center; gap: 16px; margin: 18px 0; }
-.beat-check-readout strong { font: bold 64px monospace; color: var(--mint); line-height: 1; }
+.beat-ring { width: 168px; height: 168px; flex-shrink: 0; }
+.timing-grid { max-height: 280px; overflow: auto; margin-top: 8px; border: 1px solid #24384c; border-radius: 8px; padding: 8px; }
+.timing-row { display: grid; gap: 4px; margin-bottom: 4px; align-items: center; }
+.timing-row > span, .timing-head span { color: #7f97ad; font: 9px monospace; text-align: center; }
+.timing-cell { height: 26px; border: 0; border-radius: 4px; color: #d5e7ef; font: 9px monospace; }
+.timing-cell.locked { background: #1c6b62; }
+.timing-cell.early { background: #315f86; }
+.timing-cell.late { background: #8a5a32; }
+.timing-cell.missing { background: #243246; color: #6d8296; }
+.timing-cell.is-now { outline: 2px solid #fff; outline-offset: 1px; }
+.timing-legend { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.timing-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.timing-legend i.locked { background: #1c6b62; }
+.timing-legend i.early { background: #315f86; }
+.timing-legend i.late { background: #8a5a32; }
+.timing-legend i.missing { background: #243246; }
 .beat-check-readout span, .beat-check-card p, .beat-check-tools span { color: #93a9c3; font-size: 12px; line-height: 1.6; }
 .beat-check-card input[type=range] { width: 100%; accent-color: var(--mint); }
 .beat-check-tools { display: flex; align-items: center; gap: 10px; margin: 12px 0; }

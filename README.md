@@ -89,9 +89,9 @@ tempo changes when regenerating charts. Charts use schema version 3.
 | Within ±120 ms | Close, with early/late feedback |
 | 120–216 ms early | Early |
 | 120–216 ms late | Late |
-| More than 216 ms early | Too early; target remains hittable |
+| More than 216 ms early | Extra; target remains hittable and the combo continues |
 | More than 216 ms late / no tap | Miss |
-| Click away from a target | No target |
+| Extra notes between required hits | Extra; not scored and does not break the combo |
 | Correct timing, incorrect required hand | Wrong stick, with original timing feedback |
 
 The maximum grading/acceptance windows are 20% wider than the original settings.

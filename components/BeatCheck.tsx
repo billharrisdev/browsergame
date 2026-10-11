@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { checkClicks, checkGrids, CheckGrid, heardBpm } from '../lib/game-engine/beatCheck'
+import { beatResiduals, checkClicks, checkGrids, CheckGrid, clickPhase, heardBpm } from '../lib/game-engine/beatCheck'
 import { beatPosition } from '../lib/game-engine/rhythm'
 import { trackAudio, trackChart, Track } from '../lib/music'
 import { formatTime } from './GameUI'
@@ -14,7 +14,13 @@ export default function BeatCheck({ track, onClose }: { track: Track; onClose: (
   const [bpm, setBpm] = useState(track.bpm)
   const [beat, setBeat] = useState(0)
   const [flash, setFlash] = useState(0)
+  const [phase, setPhase] = useState(0)
+  const [barBeat, setBarBeat] = useState(0)
+  const [chartBeats, setChartBeats] = useState<number[]>([])
+  const [residuals, setResiduals] = useState<{ time: number; residualMs: number | null }[]>([])
+  const [bars, setBars] = useState(4)
   const [error, setError] = useState('')
+  const gridRef = useRef<HTMLDivElement>(null)
   const audio = useRef<AudioContext | null>(null)
   const gain = useRef<GainNode | null>(null)
   const buffer = useRef<AudioBuffer | null>(null)
@@ -105,6 +111,9 @@ export default function BeatCheck({ track, onClose }: { track: Track; onClose: (
         buffer.current = decoded
         beats.current = chart.beats || []
         meter.current = chart.beatsPerBar || 4
+        setChartBeats(beats.current)
+        setBars(meter.current)
+        setResiduals(beatResiduals(beats.current, chart.attacks || []))
         setBpm(chart.bpm || track.bpm)
         setDuration(decoded.duration)
         clicks.current = checkClicks(beats.current, meter.current, 'pulse')
@@ -115,6 +124,8 @@ export default function BeatCheck({ track, onClose }: { track: Track; onClose: (
       setTime(current)
       const position = beatPosition(current, { bpm, offset: beats.current[0] || 0, beats: beats.current, confidence: 1 }, 1)
       setBeat(position.total)
+      setBarBeat(position.beat)
+      setPhase(clickPhase(clicks.current, current - nudgeRef.current).phase)
       const nearest = clicks.current.reduce((best, hit) => Math.abs(hit.time + nudgeRef.current - current) < Math.abs(best - current) ? hit.time + nudgeRef.current : best, 99)
       setFlash(Math.max(0, 1 - Math.abs(nearest - current) / 0.12))
       pump()
@@ -129,14 +140,52 @@ export default function BeatCheck({ track, onClose }: { track: Track; onClose: (
     armClicks()
   }, [grid, nudge, click])
 
+  useEffect(() => {
+    gridRef.current?.querySelector('.is-now')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [beat])
+
+  const seek = (next: number) => {
+    const was = playingRef.current
+    stopSource()
+    offset.current = next
+    setTime(next)
+    if (was) void startSource()
+  }
+  const ring = 2 * Math.PI * 62
+  const rows = []
+  for (let index = 0; index < residuals.length; index += bars) rows.push(residuals.slice(index, index + bars))
+
   return <div className="game-overlay beat-check" role="dialog" aria-label={`Beat check for ${track.title}`}>
     <section className={`overlay-card beat-check-card ${flash > 0.45 ? 'flashing' : ''}`}>
       <div className="dialog-header"><div><span className="eyebrow">DEBUG · ESTIMATED GRID</span><h2>{track.title}</h2></div><button className="small-button" onClick={onClose}>Close</button></div>
-      <div className="beat-check-readout" aria-live="polite"><strong style={{ opacity: 0.45 + flash * 0.55 }}>{beat || '—'}</strong><span>{Math.round(heardBpm(bpm, grid))} BPM heard · {Math.round(bpm)} chart · {checkGrids.find(item => item.id === grid)?.label}</span></div>
-      <input aria-label="Song position" type="range" min="0" max={duration || 0} step="0.1" value={Math.min(time, duration || 0)} onChange={event => { const next = Number(event.target.value); const was = playingRef.current; stopSource(); offset.current = next; setTime(next); if (was) void startSource() }} />
+      <div className="beat-check-readout" aria-live="polite">
+        <svg className="beat-ring" viewBox="0 0 160 160" role="img" aria-label={`Beat ${barBeat || 'not started'}, phase ${Math.round(phase * 100)} percent`}>
+          <circle cx="80" cy="80" r="62" fill="none" stroke="#24384c" strokeWidth="8" />
+          <circle cx="80" cy="80" r="62" fill="none" stroke="#5df3d1" strokeWidth="8" strokeLinecap="round" strokeDasharray={`${phase * ring} ${ring}`} transform="rotate(-90 80 80)" opacity={0.45 + flash * 0.55} />
+          <circle cx="80" cy="80" r={54 + flash * 8} fill="none" stroke="#5df3d1" strokeWidth="2" opacity={flash} />
+          {Array.from({ length: bars }, (_, index) => <circle key={index} cx={80 + Math.sin(index / bars * Math.PI * 2) * 74} cy={80 - Math.cos(index / bars * Math.PI * 2) * 74} r={index === 0 ? 3.5 : 2} fill={index + 1 === barBeat ? '#5df3d1' : '#6d879e'} />)}
+          <text x="80" y="76" textAnchor="middle" fill="#5df3d1" fontSize="36" fontFamily="monospace">{barBeat || '—'}</text>
+          <text x="80" y="98" textAnchor="middle" fill="#8eabc0" fontSize="11" fontFamily="monospace">{beat ? `BEAT ${beat}` : 'READY'}</text>
+        </svg>
+        <span>{Math.round(heardBpm(bpm, grid))} BPM heard · {Math.round(bpm)} chart · {checkGrids.find(item => item.id === grid)?.label}<br />The ring completes once per heard click. Bar dots mark the detected measure.</span>
+      </div>
+      <input aria-label="Song position" type="range" min="0" max={duration || 0} step="0.1" value={Math.min(time, duration || 0)} onChange={event => seek(Number(event.target.value))} />
       <div className="beat-check-tools"><span>{formatTime(time)} / {formatTime(duration)}</span><button className="primary-button" onClick={() => playing ? (stopSource(), setPlaying(false)) : void startSource()}>{playing ? 'Pause' : 'Play song'}</button><button className="secondary-button" aria-pressed={click} onClick={() => setClick(value => !value)}>{click ? 'Click on' : 'Click off'}</button></div>
       <div className="genre-filters" aria-label="Beat interpretations">{checkGrids.map(item => <button key={item.id} className={grid === item.id ? 'active' : ''} aria-pressed={grid === item.id} onClick={() => setGrid(item.id)}>{item.label}</button>)}</div>
       <label className="beat-nudge">Click nudge <span>{nudge > 0 ? '+' : ''}{nudge} ms</span><input type="range" min="-100" max="100" step="10" value={nudge} onChange={event => setNudge(Number(event.target.value))} /></label>
+      <div className="timing-grid" ref={gridRef} aria-label="Detected beats arranged by bar">
+        <div className="timing-row timing-head" style={{ gridTemplateColumns: `42px repeat(${bars}, 1fr)` }}>{['Bar', ...Array.from({ length: bars }, (_, index) => index + 1)].map(label => <span key={label}>{label}</span>)}</div>
+        {rows.map((row, rowIndex) => <div key={rowIndex} className="timing-row" style={{ gridTemplateColumns: `42px repeat(${bars}, 1fr)` }}>
+          <span>{rowIndex + 1}</span>
+          {row.map((cell, column) => {
+            const index = rowIndex * bars + column
+            const late = (cell.residualMs || 0) > 20
+            const early = (cell.residualMs || 0) < -20
+            return <button key={cell.time} className={`timing-cell ${index + 1 === beat ? 'is-now' : ''} ${cell.residualMs === null ? 'missing' : late ? 'late' : early ? 'early' : 'locked'}`} title={cell.residualMs === null ? 'No nearby attack' : `${cell.residualMs} ms`} onClick={() => seek(cell.time)}>{cell.residualMs === null ? '·' : cell.residualMs}</button>
+          })}
+        </div>)}
+      </div>
+      <p className="timing-legend"><i className="locked" /> within 20 ms <i className="early" /> early <i className="late" /> late <i className="missing" /> no attack. Click a cell to jump there.</p>
       <p>Nothing here is saved. Positive nudge makes the click later. Compare the click with the drums, then close and tell me which interpretation matches.</p>
       {error && <p className="error-message" role="alert">{error}</p>}
     </section>

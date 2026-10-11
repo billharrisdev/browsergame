@@ -14,16 +14,16 @@ export class RunScore {
   get resolved() { return Object.values(this.counts).reduce((sum, value) => sum + value, 0) }
   get multiplier() { return Math.min(5, 1 + Math.floor(this.combo / 10)) }
   get accuracy() {
-    const attempts = this.resolved + this.stray
+    const attempts = this.resolved
     const weighted = this.counts.Perfect + this.counts.Close * 0.7 + (this.counts.Early + this.counts.Late) * 0.35
     return attempts ? weighted / attempts * 100 : 100
   }
   get meanError() { return this.errors.length ? this.errors.reduce((sum, value) => sum + value, 0) / this.errors.length : 0 }
   get stickAccuracy() { return this.stickCorrect + this.stickWrong ? this.stickCorrect / (this.stickCorrect + this.stickWrong) * 100 : 100 }
-  get timingAccuracy() { return this.resolved + this.stray ? this.timingWeight / (this.resolved + this.stray) * 100 : 100 }
+  get timingAccuracy() { return this.resolved ? this.timingWeight / this.resolved * 100 : 100 }
 
   record(grade: Judgment, errorMs: number | null, timing: Judgment = grade, expectedHand?: Stick | null, actualHand?: Stick | null) {
-    if (grade === 'Too early' || grade === 'No target') { this.stray++; this.combo = 0; return }
+    if (grade === 'Too early' || grade === 'No target') { this.stray++; return }
     this.counts[grade]++
     if (grade === 'Miss') { this.combo = 0; return }
     if (errorMs !== null) this.errors.push(errorMs)
