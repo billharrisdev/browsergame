@@ -1,0 +1,14 @@
+[
+  { "id": "electrodoodle", "title": "Electrodoodle", "bpm": 120, "duration": 166, "isrc": "USUAN1200079", "filename": "Electrodoodle.mp3", "style": "Electronic", "difficulty": "Easy" },
+  { "id": "monkeys", "title": "Monkeys Spinning Monkeys", "bpm": 144, "duration": 125, "isrc": "USUAN1400011", "filename": "Monkeys Spinning Monkeys.mp3", "style": "Internet favorite", "difficulty": "Normal" },
+  { "id": "sneaky-snitch", "title": "Sneaky Snitch", "bpm": 87, "duration": 137, "isrc": "USUAN1100772", "filename": "Sneaky Snitch.mp3", "style": "Playful / orchestral", "difficulty": "Easy" },
+  { "id": "fluffing-a-duck", "title": "Fluffing a Duck", "bpm": 122, "duration": 67, "isrc": "USUAN1100768", "filename": "Fluffing a Duck.mp3", "style": "Bonus sprint", "difficulty": "Normal" },
+  { "id": "carefree", "title": "Carefree", "bpm": 96, "duration": 205, "isrc": "USUAN1400037", "filename": "Carefree.mp3", "style": "Ukulele / relaxed", "difficulty": "Easy" },
+  { "id": "investigations", "title": "Investigations", "bpm": 94, "duration": 94, "isrc": "USUAN1100646", "filename": "Investigations.mp3", "style": "Playful / mystery", "difficulty": "Easy" },
+  { "id": "cipher", "title": "Cipher", "bpm": 150, "duration": 231, "isrc": "USUAN1100844", "filename": "Cipher2.mp3", "style": "Electronic / neon", "difficulty": "Hard" },
+  { "id": "bit-quest", "title": "Bit Quest", "bpm": 100, "duration": 192, "isrc": "USUAN1500073", "filename": "Bit Quest.mp3", "style": "Chiptune adventure", "difficulty": "Easy" },
+  { "id": "dungeon-level", "title": "8bit Dungeon Level", "bpm": 106, "duration": 217, "isrc": "USUAN1200066", "filename": "8bit Dungeon Level.mp3", "style": "Chiptune / swing", "difficulty": "Normal" },
+  { "id": "dungeon-boss", "title": "8bit Dungeon Boss", "bpm": 134, "duration": 172, "isrc": "USUAN1200067", "filename": "8bit Dungeon Boss.mp3", "style": "Chiptune / boss", "difficulty": "Hard" },
+  { "id": "blip-stream", "title": "Blip Stream", "bpm": 150, "duration": 285, "isrc": "USUAN1500056", "filename": "Blip Stream.mp3", "style": "Electronic / arcade", "difficulty": "Hard" },
+  { "id": "pixelland", "title": "Pixelland", "bpm": 230, "duration": 234, "isrc": "USUAN1500076", "filename": "Pixelland.mp3", "style": "Chiptune / half-time", "difficulty": "Hard" }
+]

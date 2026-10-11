@@ -4,9 +4,6 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   images: {
     unoptimized: true
-  },
-  eslint: {
-    ignoreDuringBuilds: true
   }
 }
 

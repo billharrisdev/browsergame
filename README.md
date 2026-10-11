@@ -1,94 +1,80 @@
 # Frequency Frontier
 
-## Game Concept
-A musical exploration game where you play as a sound wave navigating through a spectrum analyzer landscape. The game world is literally built from live audio analysis of music.
+A browser rhythm-exploration game: move through a neon spectrum landscape,
+switch frequency, collect musical shapes, and build a resonance combo.
 
-## Technology Stack
-- **Next.js** - React framework for production
-- **TypeScript** - Type-safe development
-- **Tailwind CSS** - Utility-first CSS framework with dark mode
-- **WebGL2** - Hardware-accelerated graphics rendering
-- **PixiJS** - High-performance 2D WebGL renderer
-- **Web Audio API** - Real-time frequency analysis
-- **Tone.js** - Advanced audio manipulation and analysis
-- **GSAP** - Smooth animations and transitions
+## Run
 
-## Getting Started
+```sh
+npm install
+npm run dev
+```
 
-1. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+Open http://localhost:3000. Twelve locally hosted, CC BY 4.0 recordings are
+included in `public/music/`. To restore them:
 
-2. **Run the development server:**
-   ```bash
-   npm run dev
-   ```
+```sh
+npm run music:download
+```
 
-3. **Open your browser:**
-   Navigate to [http://localhost:3000](http://localhost:3000)
+## Play
 
-## Game Features
+- Pick a song, preview up to 20 seconds, select a challenge, then start.
+- Move with mouse, touch, **WASD**, or **arrow keys**.
+- **1 — Bass** (square): slower movement, phases through orange hazards.
+- **2 — Mid** (circle): balanced movement.
+- **3 — High** (diamond): faster movement, takes more damage.
+- Match the numbered collectible's mode and intercept it on the vertical beat
+  line for Perfect/Good timing. Other collections still score.
+- Matched timed collections build a combo and a multiplier up to ×5. Every 16
+  earns a four-second resonance burst: double points, protection, and healing.
+- Missing a collectible breaks the combo but does not cost health.
+- **Space** pauses/resumes; **R** retries a finished run. Losing window focus
+  automatically pauses. Mobile players can use the on-screen mode buttons.
+- Finish the song for results; personal bests are saved per song and difficulty.
 
-### Core Mechanics
-- Your character is a frequency that can shift up and down the audio spectrum
-- The game world constantly morphs based on the currently playing music
-- Different frequency ranges have different properties:
-  - **Bass frequencies** (🔴 Red): Let you move through solid barriers but are slow
-  - **Mid-range frequencies** (🟢 Green): Allow normal movement
-  - **High frequencies** (🔵 Blue): Enable fast movement but are vulnerable
-- Players must navigate to collect resonance points that appear at key musical moments
-- Challenging sections require frequency-shifting to match specific notes in the music
+Settings include volume, effect intensity, reduced motion, and ±200 ms timing
+adjustment. Reduced-motion system preferences are respected. Music credits are
+available from the song library.
 
-### Controls
-- **Mouse**: Move your frequency character
-- **Arrow Keys**: Shift frequency up/down
-- **A/D Keys**: Fine-tune frequency
-- **1/2/3 Keys**: Quick frequency jumps (Bass/Mid/High)
-- **Space**: Pause/Resume
-- **R**: Restart when game over
+## Audio and timing
 
-### Musical Integration
-- Import your own music to generate unique levels
-- Game difficulty adapts to the complexity and tempo of the music
-- "Boss battles" occur during musical crescendos
-- Special power-ups appear during unique audio moments (drops, solos, etc.)
+Native Web Audio provides decoding, playback, real spectrum analysis, and an
+audio-clock timeline shared by encounters and visuals. Pause/resume preserves
+the playback offset; restart rewinds both music and world.
 
-## Dark Mode
-The game defaults to dark mode with a cyberpunk aesthetic featuring:
-- Neon cyan and magenta color schemes
-- Glowing UI elements
-- Hardware-accelerated particle effects
-- Real-time spectrum visualization
+Bundled BPMs come from the composer catalog. The audio's positive energy changes
+estimate beat phase at load time; individual beats snap to nearby attacks within
+60 ms of that grid. Pixelland uses a 115 BPM half-time gameplay
+pulse. Uploaded audio stays on-device; onset-envelope autocorrelation estimates
+tempo. These are estimated regular beat grids, not hand-authored beat maps:
+swung rhythms, tempo changes, or weak attacks can be less precise. Timing offset
+can adjust alignment. Low-confidence uploads still have spectrum-reactive
+visuals and a playable estimated grid.
+
+The renderer uses high-DPI Canvas 2D and has no external CDN/library startup
+dependencies. Encounters follow deterministic phrase-based routes with advance
+visibility. Particle counts and React HUD updates are bounded.
 
 ## Development
 
-### Project Structure
-```
-├── components/          # React components
-│   ├── GameContainer.tsx
-│   ├── GameCanvas.tsx
-│   └── GameUI.tsx
-├── lib/
-│   └── game-engine/     # Game logic
-│       ├── game.ts
-│       ├── audioProcessor.ts
-│       ├── player.ts
-│       └── gameWorld.ts
-├── pages/               # Next.js pages
-├── styles/              # Global styles
-└── public/              # Static assets
+```sh
+npm test          # beat estimation, playback lifecycle, encounters, scoring
+npm run lint     # TypeScript check
+npm run build    # production build
+npm run start    # serve production build
 ```
 
-### Available Scripts
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run lint` - Run ESLint
+Main files:
 
-## Extensions
-- Collaborative multiplayer where each player controls different frequency ranges
-- Level sharing based on popular songs
-- A composition mode where players can create music specifically for challenging gameplay
+- `components/GameContainer.tsx`: library, loading, settings, credits, best scores
+- `components/GameUI.tsx`: HUD, touch mode controls, pause and results
+- `lib/game-engine/audioProcessor.ts`: native playback and spectrum analysis
+- `lib/game-engine/rhythm.ts`: beat estimation and timing windows
+- `lib/game-engine/game.ts`: game lifecycle, controls, collision and rendering
+- `lib/game-engine/gameWorld.ts`: deterministic musical encounters
+- `lib/game-engine/player.ts`: movement, scoring and resonance
+- `lib/music/tracks.json`: soundtrack metadata
 
-Would you like me to elaborate on any part of this concept?
+See [MUSIC_CREDITS.md](MUSIC_CREDITS.md) for licenses and sources. The application
+code's license does not replace the recordings' attribution license.

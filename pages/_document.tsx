@@ -5,7 +5,7 @@ export default function Document() {
     <Html lang="en" className="dark">
       <Head>
         <meta name="description" content="Frequency Frontier - A musical exploration game" />
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       </Head>
       <body className="bg-gray-900 text-white">
         <Main />
