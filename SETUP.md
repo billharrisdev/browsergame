@@ -7,13 +7,21 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000, select a song, and click **Start exploring**.
-Audio starts after a three-second countdown. The song library includes previews
-and a **Music credits** screen. No microphone permission is needed.
+Open http://localhost:3000. Select a song and click **Play the beat**.
+Listen to the four-beat count-in, then click or tap the numbered targets when
+their shrinking rings meet their outlines. Feedback shows early/late offset,
+Close, Perfect, and misses.
 
-The twelve recordings are served locally from `public/music/`. Restore missing
-files with `npm run music:download`. An individual uploaded track stays in the
-browser and is not sent to a server.
+Twenty-four local recordings and their charts are bundled. To restore files:
+
+```sh
+npm run music:download
+npm run music:charts
+```
+
+The chart-generation command requires FFmpeg on PATH. It writes derived charts
+and updates estimated tempo/duration metadata. Normal gameplay does not require
+FFmpeg. Stored charts are generated, not manually listening-verified.
 
 ## Production
 
@@ -24,9 +32,6 @@ npm run build
 npm start
 ```
 
-The app uses Next.js, React, TypeScript, native Canvas 2D, and native Web Audio.
-Serve it through Next.js; the old standalone `index.html` is not the app entry.
-There are no external graphics/audio scripts to load.
-
-See [README.md](README.md) for controls and timing behavior, and
-[MUSIC_CREDITS.md](MUSIC_CREDITS.md) for recording licenses and source links.
+Serve the app through Next.js; the old standalone `index.html` is not the app
+entry. See [README.md](README.md) for timing/scoring details and
+[MUSIC_CREDITS.md](MUSIC_CREDITS.md) for recording licenses.
