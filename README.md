@@ -14,6 +14,32 @@ npm run dev
 Open http://localhost:3000. Pick a song, optionally preview it, select a challenge,
 and click **Play the beat**. A four-beat audible count-in precedes the song.
 
+## Levels and drum sticks
+
+| Level | Practice |
+| --- | --- |
+| 1 · Pulse | Quarter notes; either stick works |
+| 2 · Eighths | Two alternating practice cycles, then **R L R R · L R L L** in eighth notes |
+| 3 · Sixteenths | The same progression at sixteenth-note spacing |
+
+Aim with the mouse: **left-click = L**, **right-click = R**. The context menu is
+suppressed only on the active playfield. Alternatively, **Left Ctrl = L** and
+**Right Ctrl = R** automatically strike the upcoming due target, regardless of
+cursor position. Each stroke needs a fresh press; release between doubles.
+L/R on-screen pads provide the same automatic targeting for touch input.
+
+Targets show their required hand and the pattern strip highlights the next
+stroke. Doubles stay at the same pad. Wrong-stick hits consume the due note and
+break the combo, but preserve timing feedback (e.g. Perfect timing, wrong L stick).
+Timing and sticking accuracy are reported separately.
+
+The upper-right counter shows total quarter-note beats, cycle position, and
+`1 & 2 & 3 & 4 &` or `1 e & a ...` subdivisions. Counter, targets, judgments, and
+optional beat click share the audible-output timeline. Unverified groupings are
+marked estimated; cycle numbering is a practice grouping, not a claim that the
+recording's musical downbeat has been manually established. The metal waltz uses
+three-beat grouping; paradiddle cycles continue across measure boundaries.
+
 ## Soundtrack
 
 - **Genre Collection:** twelve new tracks, three each for Rock, Jazz, Punk, Metal.
@@ -32,12 +58,19 @@ npm run music:charts
 ```
 
 Chart generation requires **FFmpeg** on PATH. It decodes each recording to mono
-PCM, detects bass/high-band attacks, follows an adaptive tempo grid, excludes
-silent passages, and stores timestamps in `public/charts/`. Tempos without a
+PCM, detects bass/high-band attacks, fits fractional tempo and beat phase over the
+recording, and stores a **stable quarter-note grid** in `public/charts/`. Detected
+attacks identify active measures and diagnose alignment; individual beats are no
+longer snapped to nearby peaks. Tempos without a
 composer-provided value are estimated and marked `tempoSource: analysis`.
 Charts are algorithmically generated, not manually authored or listening-verified;
 they can be adjusted directly in JSON. Jazz swing, changing tempo, and ambiguous
 attacks can need refinement. Uploaded music uses the same analysis at load time.
+Charts include beginning/middle/end residual diagnostics against detected attacks.
+These diagnostics are not listening verification. Optional `beatOffset`,
+`beatsPerBar`, `meterVerified`, and explicit `tempoMap: [{startTime, bpm}, ...]`
+metadata in `lib/music/tracks.json` support per-song corrections and deliberate
+tempo changes when regenerating charts. Charts use schema version 3.
 
 ## Timing and scoring
 
@@ -50,6 +83,11 @@ attacks can need refinement. Uploaded music uses the same analysis at load time.
 | More than 180 ms early | Too early; target remains hittable |
 | More than 180 ms late / no tap | Miss |
 | Click away from a target | No target |
+| Correct timing, incorrect required hand | Wrong stick, with original timing feedback |
+
+These are maximum windows. Dense subdivisions cap the hit window at half the
+neighboring stroke spacing; Perfect/Close windows shrink proportionally, as
+shown in the HUD. This prevents sixteenth notes from stealing adjacent strokes.
 
 Every attempt shows localized feedback and a signed timing indicator. The timing
 meter plots recent hits: early on the left, late on the right. Perfect and Close
@@ -59,13 +97,15 @@ accuracy rewards precise hits and accounts for off-window attempts.
 
 The entire song is playable regardless of misses. Results include judgment counts,
 accuracy, mean early/late offset, best combo, and personal best per song/difficulty.
-Click-game scores use a new namespace so old exploration scores are not compared.
+Stick-game scores use a new namespace so earlier chart/density scores are not compared.
 
-- **Mouse / touch:** hit targets. No movement keys or mode shortcuts.
+- **Mouse:** aim + left/right click. **Left/Right Ctrl:** automatically hit with L/R.
+- **Touch:** use the L/R pads. Level 1 also accepts ordinary target taps.
 - **Space:** pause/resume. **R:** retry after results.
 - Targets also expose focusable buttons; Enter/Space can activate a focused target.
 - Losing focus automatically pauses. Resume preserves song and target timing.
-- Settings: volume, visual intensity, reduced motion, and ±200 ms calibration.
+- Settings: volume, visual intensity, reduced motion, beat click, and ±200 ms calibration.
+- Calibration and beat-click preference persist locally across reloads.
 - Reduced motion disables decorative flashes/expansions, preserving functional
   approach rings and progress arcs.
 
@@ -84,8 +124,8 @@ npm start
 ```
 
 - `components/GameContainer.tsx`: collections, loading, settings, credits, bests
-- `components/GameUI.tsx`: target input overlays, HUD, timing meter, results
-- `lib/game-engine/audioProcessor.ts`: playback, count-in, output clock, spectrum
+- `components/GameUI.tsx`: beat counter, pattern strip, stick pads, timing meter, results
+- `lib/game-engine/audioProcessor.ts`: playback, phase-aligned count-in, metronome, output clock
 - `lib/game-engine/rhythm.ts`: chart analysis and timing judgments
 - `lib/game-engine/gameWorld.ts`: target lifetime and click resolution
 - `lib/game-engine/scoring.ts`: combos and accuracy

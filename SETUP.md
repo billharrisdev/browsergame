@@ -8,9 +8,14 @@ npm run dev
 ```
 
 Open http://localhost:3000. Select a song and click **Play the beat**.
-Listen to the four-beat count-in, then click or tap the numbered targets when
-their shrinking rings meet their outlines. Feedback shows early/late offset,
-Close, Perfect, and misses.
+Listen to the phase-aligned count-in, then hit targets when their rings close.
+Aim + left/right mouse click for L/R sticks, or use Left/Right Ctrl to strike the
+next target automatically. Release between strokes. Touch users can use L/R pads.
+The corner counter shows beats/subdivisions; its Click toggle enables a metronome.
+
+Level 1 is a quarter-note pulse. Level 2 introduces the basic R L R R · L R L L
+paradiddle in eighth notes, and level 3 progresses to sixteenths. Feedback reports
+timing and whether the correct stick was used.
 
 Twenty-four local recordings and their charts are bundled. To restore files:
 
@@ -22,6 +27,9 @@ npm run music:charts
 The chart-generation command requires FFmpeg on PATH. It writes derived charts
 and updates estimated tempo/duration metadata. Normal gameplay does not require
 FFmpeg. Stored charts are generated, not manually listening-verified.
+Version 3 charts use stable beat grids and fractional tempo fitting, with
+alignment diagnostics at the beginning, middle, and end of each recording.
+Timing calibration is available in Settings and persists across reloads.
 
 ## Production
 

@@ -1,6 +1,6 @@
 import { AudioProcessor } from './audioProcessor'
 import { approachTime, BeatTarget, GameWorld, HitResult } from './gameWorld'
-import { describeTiming, Judgment, nearestBeatDistance } from './rhythm'
+import { beatInterval, beatPosition, controlStick, Judgment, nearestBeatDistance, paradiddle, Stick, subdivisionsFor } from './rhythm'
 import { JudgmentCounts } from './scoring'
 
 export type GameState = 'menu' | 'countdown' | 'playing' | 'paused' | 'complete'
@@ -22,17 +22,34 @@ export interface GameSnapshot {
   stray: number
   meanError: number
   errors: number[]
-  targets: { id: number; x: number; y: number; radius: number }[]
+  targets: { id: number; x: number; y: number; radius: number; hand: Stick | null }[]
+  beat: ReturnType<typeof beatPosition>
+  meter: number
+  meterVerified: boolean
+  division: number
+  pattern: string
+  patternSteps: Stick[]
+  patternStep: number
+  expectedStick: Stick | null
+  pressed: Record<Stick, boolean>
+  timingAccuracy: number
+  stickAccuracy: number
+  stickAttempts: number
+  perfectWindowMs: number
+  closeWindowMs: number
 }
 
 export const initialSnapshot: GameSnapshot = {
   state: 'menu', score: 0, combo: 0, multiplier: 1, progress: 0, duration: 0, bpm: 120, confidence: 0,
-  feedback: null, countdown: 4, counts: { Perfect: 0, Close: 0, Early: 0, Late: 0, Miss: 0 }, accuracy: 100,
-  bestCombo: 0, totalTargets: 0, stray: 0, meanError: 0, errors: [], targets: []
+  feedback: null, countdown: 4, counts: { Perfect: 0, Close: 0, Early: 0, Late: 0, Miss: 0, 'Wrong stick': 0 }, accuracy: 100,
+  bestCombo: 0, totalTargets: 0, stray: 0, meanError: 0, errors: [], targets: [],
+  beat: { total: 0, beat: 0, bar: 0, subdivision: 0, phase: 0 }, meter: 4, meterVerified: false, division: 1,
+  pattern: 'Pulse', patternSteps: [], patternStep: 0, expectedStick: null, pressed: { L: false, R: false },
+  timingAccuracy: 100, stickAccuracy: 100, stickAttempts: 0, perfectWindowMs: 45, closeWindowMs: 100
 }
 
 export const judgmentColors: Record<Judgment, string> = {
-  Perfect: '#5df3d1', Close: '#8ebfff', Early: '#ffc581', Late: '#e8a3ff', 'Too early': '#ff9c81', Miss: '#ff708d', 'No target': '#ff708d'
+  Perfect: '#5df3d1', Close: '#8ebfff', Early: '#ffc581', Late: '#e8a3ff', 'Too early': '#ff9c81', Miss: '#ff708d', 'No target': '#ff708d', 'Wrong stick': '#ff708d'
 }
 
 export class FrequencyFrontierGame {
@@ -54,6 +71,8 @@ export class FrequencyFrontierGame {
   private feedback: HitResult | null = null
   private disposed = false
   private difficulty = 'Easy'
+  private heldSticks = new Set<Stick>()
+  private flashUntil: Record<Stick, number> = { L: 0, R: 0 }
   private resizeObserver: ResizeObserver
 
   constructor(private canvas: HTMLCanvasElement) {
@@ -64,7 +83,9 @@ export class FrequencyFrontierGame {
     this.resizeObserver.observe(canvas)
     this.resize()
     canvas.addEventListener('pointerdown', this.pointer)
+    canvas.addEventListener('contextmenu', this.contextMenu)
     window.addEventListener('keydown', this.keydown)
+    window.addEventListener('keyup', this.keyup)
     window.addEventListener('blur', this.blur)
     document.addEventListener('visibilitychange', this.visibility)
     this.frame = requestAnimationFrame(this.loop)
@@ -82,8 +103,8 @@ export class FrequencyFrontierGame {
 
   private get playfield() {
     const compact = this.height < 500
-    const top = compact ? 80 : this.width <= 680 ? 150 : 130
-    const bottom = compact ? 85 : this.width <= 680 ? 160 : 140
+    const top = compact ? 158 : this.width <= 680 ? 315 : 190
+    const bottom = compact ? 100 : this.width <= 680 ? 215 : 185
     const width = Math.min(880, Math.max(100, this.width - 64))
     const height = Math.max(100, this.height - top - bottom)
     return { x: (this.width - width) / 2, y: top, width, height, radius: Math.max(25, Math.min(42, width * 0.09, height * 0.2)) }
@@ -95,24 +116,44 @@ export class FrequencyFrontierGame {
   }
 
   private pointer = (event: PointerEvent) => {
-    if (this.gameState !== 'playing' || !event.isPrimary || event.button !== 0) return
+    if (this.gameState !== 'playing' || !event.isPrimary || ![0, 2].includes(event.button)) return
     event.preventDefault()
-    this.clickAt(event.clientX, event.clientY, event.timeStamp)
+    this.clickAt(event.clientX, event.clientY, event.timeStamp, event.button === 2 ? 'R' : 'L')
+  }
+  private contextMenu = (event: MouseEvent) => { if (this.gameState === 'playing') event.preventDefault() }
+
+  private inputTime(eventTime: number) {
+    const stamp = eventTime > performance.now() + 1000 ? eventTime - performance.timeOrigin : eventTime
+    return this.audioProcessor.timeAt(stamp) + this.timingOffset / 1000
   }
 
-  clickAt(clientX: number, clientY: number, eventTime = performance.now()) {
+  clickAt(clientX: number, clientY: number, eventTime = performance.now(), hand: Stick = 'L') {
     if (this.gameState !== 'playing') return
     const rect = this.canvas.getBoundingClientRect()
     const field = this.playfield
     const x = (clientX - rect.left - field.x) / field.width
     const y = (clientY - rect.top - field.y) / field.height
-    const stamp = eventTime > performance.now() + 1000 ? eventTime - performance.timeOrigin : eventTime
-    const time = this.audioProcessor.timeAt(stamp) + this.timingOffset / 1000
-    this.feedback = this.gameWorld!.hit(x, y, time, field.width, field.height, field.radius + 8)
+    this.flashUntil[hand] = performance.now() + 120
+    this.feedback = this.gameWorld!.hit(x, y, this.inputTime(eventTime), field.width, field.height, field.radius + 8, hand)
+    this.emit()
+  }
+
+  strikeStick(hand: Stick, eventTime = performance.now()) {
+    if (this.gameState !== 'playing') return
+    this.flashUntil[hand] = performance.now() + 120
+    this.feedback = this.gameWorld!.strike(hand, this.inputTime(eventTime))
     this.emit()
   }
 
   private keydown = (event: KeyboardEvent) => {
+    const hand = controlStick(event.code, event.location)
+    if (hand && this.gameState === 'playing' && !(event.target as HTMLElement)?.closest('input, select, textarea, dialog') && !event.isComposing) {
+      event.preventDefault()
+      if (event.repeat || this.heldSticks.has(hand)) return
+      this.heldSticks.add(hand)
+      this.strikeStick(hand, event.timeStamp)
+      return
+    }
     if ((event.target as HTMLElement)?.closest('button, input, select, textarea, a') || event.repeat) return
     if (event.code === 'Space') {
       event.preventDefault()
@@ -121,7 +162,14 @@ export class FrequencyFrontierGame {
     }
     if (event.code === 'KeyR' && this.gameState === 'complete') void this.restartGame()
   }
-  private blur = () => { this.pauseGame() }
+  private keyup = (event: KeyboardEvent) => {
+    const hand = controlStick(event.code, event.location)
+    if (!hand) return
+    this.heldSticks.delete(hand)
+    this.emit()
+  }
+  private clearSticks() { this.heldSticks.clear(); this.flashUntil = { L: 0, R: 0 } }
+  private blur = () => { this.clearSticks(); this.pauseGame() }
   private visibility = () => { if (document.hidden) this.pauseGame() }
   async unlockAudio() { await this.audioProcessor.initialize() }
 
@@ -132,7 +180,10 @@ export class FrequencyFrontierGame {
     this.gameWorld = new GameWorld(this.audioProcessor.beatMap, this.audioProcessor.duration, difficulty)
     if (!this.gameWorld.targets.length) throw new Error('No clear beat targets were found. Try another recording.')
     this.feedback = null
-    this.countdownRemaining = 4 * 60 / this.audioProcessor.beatMap.bpm + 0.08
+    this.clearSticks()
+    const period = 60 / this.audioProcessor.beatMap.bpm
+    const phase = ((this.audioProcessor.beatMap.offset % period) + period) % period - this.timingOffset / 1000
+    this.countdownRemaining = 4 * period + 0.08 - phase
     this.gameState = 'countdown'
     this.emit()
     try { await this.audioProcessor.startPlayback(this.countdownRemaining, true) }
@@ -145,6 +196,7 @@ export class FrequencyFrontierGame {
     this.pausedTime = this.time
     if (this.gameState === 'countdown' && this.audioProcessor.isPlaying) this.countdownRemaining = Math.max(0, -this.audioProcessor.timeAt())
     this.audioProcessor.stopPlayback()
+    this.clearSticks()
     this.gameState = 'paused'
     this.emit()
   }
@@ -166,35 +218,51 @@ export class FrequencyFrontierGame {
     this.gameState = 'menu'
     this.gameWorld = null
     this.feedback = null
+    this.clearSticks()
     this.emit()
   }
 
   private emit() {
     const stats = this.gameWorld?.stats
     const field = this.playfield
+    const map = this.audioProcessor.beatMap
+    const division = subdivisionsFor(this.difficulty)
+    const next = this.gameWorld?.nextTarget(this.time)
+    const period = 60 / map.bpm
+    const phase = ((map.offset % period) + period) % period - this.timingOffset / 1000
+    const pattern = next?.pattern || 'Pulse'
+    const window = next?.window || 0.18
+    const beat = beatPosition(this.time, map, division)
     this.onUpdate?.({
       state: this.gameState, score: stats?.score || 0, combo: stats?.combo || 0, multiplier: stats?.multiplier || 1,
       progress: Math.max(0, Math.min(this.audioProcessor.duration, this.time)), duration: this.audioProcessor.duration,
-      bpm: this.audioProcessor.beatMap.bpm, confidence: this.audioProcessor.beatMap.confidence,
-      feedback: this.feedback, countdown: Math.min(4, Math.max(1, Math.ceil(this.countdownRemaining / (60 / this.audioProcessor.beatMap.bpm)))),
+      bpm: beat.total > 0 ? 60 / beatInterval(map, beat.total - 1) : map.bpm, confidence: map.confidence,
+      feedback: this.feedback, countdown: Math.min(4, Math.max(1, Math.ceil((this.countdownRemaining + phase) / period))),
       counts: { ...(stats?.counts || initialSnapshot.counts) }, accuracy: stats?.accuracy ?? 100, bestCombo: stats?.bestCombo || 0,
       totalTargets: this.gameWorld?.targets.length || 0, stray: stats?.stray || 0, meanError: stats?.meanError || 0,
       errors: stats?.errors.slice(-24) || [],
-      targets: this.gameWorld?.active.filter(target => !target.resolved).map(target => ({
-        id: target.id, x: field.x + target.x * field.width, y: field.y + target.y * field.height, radius: field.radius
-      })) || []
+      targets: this.visibleTargets().map(target => ({
+        id: target.id, x: field.x + target.x * field.width, y: field.y + target.y * field.height, radius: field.radius, hand: target.hand
+      })),
+      beat, meter: map.beatsPerBar || 4, meterVerified: !!map.meterVerified, division,
+      pattern, patternSteps: pattern === 'Pulse' ? [] : pattern === 'Alternating' ? ['R', 'L', 'R', 'L', 'R', 'L', 'R', 'L'] : paradiddle,
+      patternStep: next?.step || 0, expectedStick: next?.hand || null,
+      pressed: { L: this.heldSticks.has('L') || performance.now() < this.flashUntil.L, R: this.heldSticks.has('R') || performance.now() < this.flashUntil.R },
+      timingAccuracy: stats?.timingAccuracy ?? 100, stickAccuracy: stats?.stickAccuracy ?? 100,
+      stickAttempts: (stats?.stickCorrect || 0) + (stats?.stickWrong || 0),
+      perfectWindowMs: Math.round(Math.min(0.045, window * 0.5) * 1000), closeWindowMs: Math.round(Math.min(0.1, window * 0.85) * 1000)
     })
   }
 
   private loop = (now: number) => {
     if (this.disposed) return
     const rawTime = this.audioProcessor.timeAt()
+    if (this.gameState === 'playing' || this.gameState === 'countdown') this.audioProcessor.update()
     if (this.gameState === 'countdown' && this.audioProcessor.isPlaying) {
       this.countdownRemaining = Math.max(0, -rawTime)
       if (rawTime >= 0) this.gameState = 'playing'
     }
     if (this.gameState === 'playing') {
-      this.audioProcessor.update()
       const lastFeedback = this.gameWorld!.lastHit
       this.gameWorld!.update(this.time)
       if (this.gameWorld!.lastHit !== lastFeedback) this.feedback = this.gameWorld!.lastHit
@@ -217,7 +285,7 @@ export class FrequencyFrontierGame {
     const fraction = Math.max(0, Math.min(1, remaining / approachTime(this.difficulty)))
     const x = field.x + target.x * field.width
     const y = field.y + target.y * field.height
-    const color = next ? '#5df3d1' : '#8aa5df'
+    const color = target.hand === 'L' ? '#8ebfff' : target.hand === 'R' ? '#c3a0ff' : '#5df3d1'
     const radius = field.radius
     ctx.save(); ctx.translate(x, y)
     ctx.globalAlpha = next ? 1 : 0.48
@@ -234,10 +302,11 @@ export class FrequencyFrontierGame {
     ctx.beginPath(); ctx.arc(0, 0, radius - 7, -Math.PI / 2, -Math.PI / 2 + (1 - fraction) * Math.PI * 2); ctx.stroke()
     ctx.globalAlpha = next ? 1 : 0.65
     ctx.fillStyle = '#edf8ff'; ctx.font = `bold ${radius * 0.65}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillText(String(target.id), 0, 1)
+    ctx.fillText(target.hand || String(target.id), 0, target.hand ? -5 : 1)
+    if (target.hand) { ctx.font = '10px monospace'; ctx.fillText(String(target.id), 0, radius * 0.48) }
     if (next) {
       ctx.font = '10px monospace'; ctx.fillStyle = color
-      ctx.fillText(remaining < 0 ? 'LATE' : remaining <= 0.045 ? 'HIT!' : 'NEXT', 0, -radius - 14)
+      ctx.fillText(remaining < 0 ? 'LATE' : remaining <= Math.min(0.045, target.window * 0.5) ? 'HIT!' : 'NEXT', 0, -radius - 14)
     }
     ctx.restore()
   }
@@ -266,7 +335,7 @@ export class FrequencyFrontierGame {
     }
     ctx.globalAlpha = 1
     if (this.gameState === 'menu' || this.gameState === 'countdown') return
-    const targets = this.gameWorld?.active.filter(target => !target.resolved) || []
+    const targets = this.visibleTargets()
     const field = this.playfield
     if (targets.length > 1) {
       ctx.strokeStyle = '#567a9366'; ctx.setLineDash([3, 8]); ctx.beginPath()
@@ -275,7 +344,10 @@ export class FrequencyFrontierGame {
       ctx.stroke(); ctx.setLineDash([])
     }
     for (let i = targets.length - 1; i >= 0; i--) this.drawTarget(targets[i], i === 0, time)
-    for (const hit of this.gameWorld?.feedback || []) {
+    const feedback = this.gameWorld?.feedback || []
+    // Doubles hit the same pad quickly: keep one compact local label per pad
+    // rather than stacking eight full timing/sticking sentences on top of it.
+    for (const hit of feedback.filter((item, index) => !feedback.slice(index + 1).some(other => other.x === item.x && other.y === item.y))) {
       const age = time - hit.time
       if (age < 0 || age > 0.85) continue
       const x = field.x + hit.x * field.width
@@ -283,7 +355,10 @@ export class FrequencyFrontierGame {
       ctx.save()
       ctx.globalAlpha = Math.max(0, 1 - age / 0.85)
       ctx.fillStyle = judgmentColors[hit.grade]; ctx.textAlign = 'center'; ctx.font = 'bold 14px monospace'
-      ctx.fillText(describeTiming(hit.grade, hit.errorMs), Math.max(100, Math.min(w - 100, x)), y - field.radius - 30 - age * 20 * motion)
+      ctx.font = `bold ${w <= 680 ? 10 : 13}px monospace`
+      const message = hit.grade === 'Wrong stick' ? `Wrong stick: ${hit.expectedHand}`
+        : hit.errorMs === null ? hit.grade : `${hit.grade} ${hit.errorMs > 0 ? '+' : ''}${hit.errorMs} ms`
+      ctx.fillText(message, Math.max(w <= 680 ? 135 : 160, Math.min(w - (w <= 680 ? 135 : 160), x)), y - field.radius - 30 - age * 20 * motion)
       if (hit.grade !== 'Too early' && hit.grade !== 'No target') {
         ctx.strokeStyle = judgmentColors[hit.grade]; ctx.lineWidth = 2
         ctx.beginPath(); ctx.arc(x, y, field.radius + age * 65 * motion, 0, Math.PI * 2); ctx.stroke()
@@ -292,12 +367,21 @@ export class FrequencyFrontierGame {
     }
   }
 
+  private visibleTargets() {
+    const targets = this.gameWorld?.active.filter(target => !target.resolved) || []
+    // Doubles share a pad. Only draw the nearest target at each position;
+    // subsequent strokes remain in the pattern strip and timing model.
+    return targets.filter((target, index) => targets.findIndex(other => other.x === target.x && other.y === target.y) === index).slice(0, 3)
+  }
+
   dispose() {
     this.disposed = true
     cancelAnimationFrame(this.frame)
     this.resizeObserver.disconnect()
     this.canvas.removeEventListener('pointerdown', this.pointer)
+    this.canvas.removeEventListener('contextmenu', this.contextMenu)
     window.removeEventListener('keydown', this.keydown)
+    window.removeEventListener('keyup', this.keyup)
     window.removeEventListener('blur', this.blur)
     document.removeEventListener('visibilitychange', this.visibility)
     this.audioProcessor.dispose()

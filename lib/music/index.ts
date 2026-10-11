@@ -14,6 +14,10 @@ export interface Track {
   download?: string
   isrc?: string
   filename?: string
+  beatOffset?: number
+  beatsPerBar?: number
+  meterVerified?: boolean
+  tempoMap?: { startTime: number; bpm: number }[]
 }
 export const tracks = (catalog as Track[]).map(track => ({ ...track, artist: track.artist || 'Kevin MacLeod', collection: track.collection || 'original' }))
 export const musicLicense = 'https://creativecommons.org/licenses/by/4.0/'

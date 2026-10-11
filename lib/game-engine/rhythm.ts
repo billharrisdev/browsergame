@@ -6,6 +6,97 @@ export interface BeatMap {
   notes?: number[]
   version?: number
   duration?: number
+  beatsPerBar?: number
+  meterVerified?: boolean
+  tempoMap?: { startTime: number; bpm: number }[]
+  attacks?: number[]
+  alignment?: { section: string; meanResidualMs: number; matchedBeats: number }[]
+}
+
+export const subdivisionsFor = (difficulty: string) => difficulty === 'Hard' ? 4 : difficulty === 'Normal' ? 2 : 1
+export const subdivisionLabels = (division: number) => division === 4 ? ['', 'e', '&', 'a'] : division === 2 ? ['', '&'] : ['']
+export type Stick = 'L' | 'R'
+export const paradiddle: Stick[] = ['R', 'L', 'R', 'R', 'L', 'R', 'L', 'L']
+export const controlStick = (code: string, location: number): Stick | null =>
+  code === 'ControlLeft' || (code === 'Control' && location === 1) ? 'L' : code === 'ControlRight' || (code === 'Control' && location === 2) ? 'R' : null
+
+export function makeTempoGrid(duration: number, segments: { startTime: number; bpm: number }[]) {
+  const beats: number[] = []
+  for (let index = 0; index < segments.length; index++) {
+    const segment = segments[index]
+    const end = Math.min(duration, segments[index + 1]?.startTime ?? duration)
+    for (let time = segment.startTime; time < end - 1e-7; time += 60 / segment.bpm) beats.push(time)
+  }
+  return beats
+}
+
+export function beatInterval(map: BeatMap, index: number) {
+  if (map.beats[index + 1] !== undefined) return map.beats[index + 1] - map.beats[index]
+  const segment = map.tempoMap?.filter(item => item.startTime <= map.beats[index]).pop()
+  return 60 / (segment?.bpm || map.bpm)
+}
+
+export function beatPosition(time: number, map: BeatMap, division = 1) {
+  const beats = map.beats
+  let low = 0, high = beats.length
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2)
+    if (beats[middle] <= time + 1e-7) low = middle + 1
+    else high = middle
+  }
+  const index = low - 1
+  const meter = map.beatsPerBar || 4
+  if (index < 0) return { total: 0, beat: 0, bar: 0, subdivision: 0, phase: 0 }
+  const period = beatInterval(map, index)
+  const phase = Math.max(0, Math.min(0.999999, (time - beats[index]) / period))
+  return { total: index + 1, beat: index % meter + 1, bar: Math.floor(index / meter) + 1, subdivision: Math.min(division - 1, Math.floor(phase * division + 1e-7)), phase }
+}
+
+// Autocorrelation identifies the pulse family. Whole-recording phase coherence
+// then fits fractional BPM: integer BPM/rounded lags can drift over a long song.
+function fitPulse(envelope: number[], rate: number, suppliedBpm?: number) {
+  let bpm = suppliedBpm || 120
+  let correlationConfidence = 1
+  if (!suppliedBpm) {
+    let best = 0, sum = 0, count = 0
+    const length = Math.min(envelope.length, Math.floor(rate * 90))
+    for (let candidate = 70; candidate <= 180; candidate++) {
+      const lag = Math.round(rate * 60 / candidate)
+      let correlation = 0
+      for (let i = lag; i < length; i++) correlation += envelope[i] * envelope[i - lag]
+      sum += correlation; count++
+      if (correlation > best) { best = correlation; bpm = candidate }
+    }
+    correlationConfidence = best ? Math.min(1, Math.max(0, (best / (sum / count) - 1) / 3)) : 0
+  }
+  if (bpm > 180) bpm /= 2
+  const measure = (candidate: number) => {
+    const period = 60 / candidate
+    const bins = new Float64Array(100)
+    let total = 0
+    for (let i = 0; i < envelope.length; i++) {
+      const value = envelope[i]
+      if (!value) continue
+      bins[Math.round(((i / rate) % period) / period * 100) % 100] += value
+      total += value
+    }
+    let best = 0, phase = 0
+    for (let bin = 0; bin < 100; bin++) {
+      let score = 0
+      for (let neighbor = -2; neighbor <= 2; neighbor++) score += bins[(bin + neighbor + 100) % 100]
+      if (score > best) { best = score; phase = bin / 100 * period }
+    }
+    return { score: total ? best / total : 0, phase }
+  }
+  let fit = measure(bpm)
+  if (!suppliedBpm && correlationConfidence > 0) {
+    const anchor = bpm
+    for (let candidate = Math.max(60, anchor - 3); candidate <= Math.min(183, anchor + 3); candidate += 0.02) {
+      const next = measure(candidate)
+      if (next.score > fit.score) { fit = next; bpm = Math.round(candidate * 100) / 100 }
+    }
+  }
+  return { bpm, offset: fit.phase, confidence: Math.min(correlationConfidence, Math.min(1, fit.score * 4)) }
 }
 
 export function makeBeatGrid(duration: number, bpm: number, offset: number): number[] {
@@ -29,56 +120,8 @@ export function analyzeBeats(samples: Float32Array, sampleRate: number, supplied
     envelope.push(Math.max(0, rms - previous))
     previous = rms
   }
-  const rate = sampleRate / hop
-  let bpm = suppliedBpm || 120
-  let confidence = 0
-  if (!suppliedBpm) {
-    let best = 0
-    let sum = 0
-    let count = 0
-    // Limit the search window to keep long uploads responsive.
-    const length = Math.min(envelope.length, Math.floor(rate * 90))
-    for (let candidate = 70; candidate <= 180; candidate++) {
-      const lag = Math.round(rate * 60 / candidate)
-      let correlation = 0
-      for (let i = lag; i < length; i++) correlation += envelope[i] * envelope[i - lag]
-      sum += correlation
-      count++
-      if (correlation > best) { best = correlation; bpm = candidate }
-    }
-    confidence = best > 0 ? Math.min(1, Math.max(0, (best / (sum / count) - 1) / 3)) : 0
-  }
-  // Very fast songs use half-time encounters; visuals still follow this shared clock.
-  if (bpm > 180) bpm /= 2
-  const period = 60 / bpm
-  let phase = 0
-  let bestPhase = 0
-  let total = 0
-  const phaseScores = new Float64Array(100)
-  for (let i = 0; i < envelope.length; i++) {
-    const bin = Math.round(((i / rate) % period) / period * 100) % 100
-    phaseScores[bin] += envelope[i]
-    total += envelope[i]
-  }
-  for (let bin = 0; bin < 100; bin++) {
-    let score = 0
-    for (let neighbor = -3; neighbor <= 3; neighbor++) score += phaseScores[(bin + neighbor + 100) % 100]
-    if (score > bestPhase) { bestPhase = score; phase = bin / 100 * period }
-  }
-  if (suppliedBpm) confidence = total > 0 ? Math.min(1, bestPhase / total * 4) : 0
-  const beats = makeBeatGrid(samples.length / sampleRate, bpm, phase).map(expected => {
-    // Keep the regular tempo as an anchor, but align each beat to a nearby
-    // attack. This handles small expressive timing differences without drift.
-    const start = Math.max(0, Math.floor((expected - 0.06) * rate))
-    const end = Math.min(envelope.length - 1, Math.ceil((expected + 0.06) * rate))
-    let peak = 0
-    let aligned = expected
-    for (let i = start; i <= end; i++) {
-      if (envelope[i] > peak) { peak = envelope[i]; aligned = i / rate }
-    }
-    return aligned
-  })
-  return { bpm, offset: phase, confidence, beats }
+  const fit = fitPulse(envelope, sampleRate / hop, suppliedBpm)
+  return { ...fit, beats: makeBeatGrid(samples.length / sampleRate, fit.bpm, fit.offset) }
 }
 
 export function nearestBeatDistance(time: number, map: BeatMap): number {
@@ -100,15 +143,15 @@ export function nearestBeatDistance(time: number, map: BeatMap): number {
   return Math.min(phase, period - phase)
 }
 
-export type Judgment = 'Perfect' | 'Close' | 'Early' | 'Late' | 'Too early' | 'Miss' | 'No target'
+export type Judgment = 'Perfect' | 'Close' | 'Early' | 'Late' | 'Too early' | 'Miss' | 'No target' | 'Wrong stick'
 export const hitWindow = 0.18
 
-export function timingGrade(errorSeconds: number): Judgment {
+export function timingGrade(errorSeconds: number, window = hitWindow): Judgment {
   const error = Math.round(Math.abs(errorSeconds) * 1000000) / 1000000
-  if (errorSeconds < -hitWindow && error > hitWindow) return 'Too early'
-  if (error > hitWindow) return 'Miss'
-  if (error <= 0.045) return 'Perfect'
-  if (error <= 0.1) return 'Close'
+  if (errorSeconds < -window && error > window + 1e-7) return 'Too early'
+  if (error > window + 1e-7) return 'Miss'
+  if (error <= Math.min(0.045, window * 0.5)) return 'Perfect'
+  if (error <= Math.min(0.1, window * 0.85)) return 'Close'
   return errorSeconds < 0 ? 'Early' : 'Late'
 }
 
@@ -118,10 +161,10 @@ export function describeTiming(grade: Judgment, errorMs: number | null): string 
   return `${grade} · ${amount === 0 ? 'on time' : `${amount} ms ${errorMs < 0 ? 'early' : 'late'}`}`
 }
 
-// Offline charts follow locally detected attacks, with a tempo anchor that can
-// adapt gradually. Quiet passages are excluded from target generation.
-export function buildSongChart(samples: Float32Array, sampleRate: number, suppliedBpm?: number): BeatMap {
-  const map = analyzeBeats(samples, sampleRate, suppliedBpm)
+// Attacks diagnose phase and active passages; they NEVER move individual beats.
+// This distinction is essential for consistent subdivisions and rudiments.
+export function buildSongChart(samples: Float32Array, sampleRate: number, suppliedBpm?: number,
+  options: { offset?: number; beatsPerBar?: number; meterVerified?: boolean; tempoMap?: { startTime: number; bpm: number }[] } = {}): BeatMap {
   const hop = Math.max(1, Math.round(sampleRate / 100))
   const rate = sampleRate / hop
   const energy: number[] = []
@@ -150,27 +193,39 @@ export function buildSongChart(samples: Float32Array, sampleRate: number, suppli
   const maxEnergy = energy.reduce((max, value) => Math.max(max, value), 0)
   const sorted = attacks.filter(value => value > 0).sort((a, b) => a - b)
   const attackThreshold = (sorted[Math.floor(sorted.length * 0.7)] || 0) * 0.15
-  const period = 60 / map.bpm
-  const beats: number[] = []
+  const map = fitPulse(attacks, rate, suppliedBpm)
+  if (Number.isFinite(options.offset)) map.offset = Math.max(0, options.offset!)
+  const segments = options.tempoMap?.length ? options.tempoMap : [{ startTime: map.offset, bpm: map.bpm }]
+  if (segments.some((segment, index) => !Number.isFinite(segment.startTime) || !Number.isFinite(segment.bpm) || segment.startTime < 0 || segment.bpm <= 0 || (index > 0 && segment.startTime <= segments[index - 1].startTime))) throw new Error('Invalid tempo map')
+  map.offset = segments[0].startTime
+  map.bpm = segments[0].bpm
+  const beats = makeTempoGrid(samples.length / sampleRate, segments)
   const notes: number[] = []
-  let correction = 0
-  for (let expected = map.offset; expected < samples.length / sampleRate; expected += period) {
-    const predicted = expected + correction
+  const detected: number[] = []
+  const residuals: { time: number; error: number }[] = []
+  for (let beat = 0; beat < beats.length; beat++) {
+    const expected = beats[beat]
+    const period = beat + 1 < beats.length ? beats[beat + 1] - expected : 60 / segments[segments.length - 1].bpm
     const radius = Math.min(0.12, period * 0.24)
-    const start = Math.max(0, Math.floor((predicted - radius) * rate))
-    const end = Math.min(attacks.length - 1, Math.ceil((predicted + radius) * rate))
-    let bestScore = 0, strongest = 0, aligned = predicted
+    const start = Math.max(0, Math.floor((expected - radius) * rate))
+    const end = Math.min(attacks.length - 1, Math.ceil((expected + radius) * rate))
+    let bestScore = 0, strongest = 0, aligned = expected
     for (let i = start; i <= end; i++) {
-      const weighted = attacks[i] * (1 - Math.abs(i / rate - predicted) / (radius * 2))
+      const weighted = attacks[i] * (1 - Math.abs(i / rate - expected) / (radius * 2))
       if (weighted > bestScore) { bestScore = weighted; strongest = attacks[i]; aligned = i / rate }
     }
-    correction += (aligned - predicted) * 0.35
-    if (aligned < 0 || aligned >= samples.length / sampleRate) continue
-    const time = Math.round(aligned * 1000) / 1000
-    if (beats.length && time - beats[beats.length - 1] < period * 0.5) continue
-    beats.push(time)
     const localEnergy = energy[Math.min(energy.length - 1, Math.round(aligned * rate))] || 0
-    if (strongest > attackThreshold && localEnergy > maxEnergy * 0.045) notes.push(time)
+    if (strongest > attackThreshold && localEnergy > maxEnergy * 0.045) {
+      notes.push(expected)
+      detected.push(Math.round(aligned * 1000) / 1000)
+      residuals.push({ time: expected, error: (aligned - expected) * 1000 })
+    }
   }
-  return { ...map, beats, notes, version: 2, duration: samples.length / sampleRate }
+  const duration = samples.length / sampleRate
+  const alignment = ['Beginning', 'Middle', 'End'].map((section, index) => {
+    const matched = residuals.filter(hit => hit.time >= index * duration / 3 && hit.time < (index + 1) * duration / 3)
+    return { section, matchedBeats: matched.length, meanResidualMs: matched.length ? Math.round(matched.reduce((sum, hit) => sum + hit.error, 0) / matched.length) : 0 }
+  })
+  return { ...map, beats, notes, attacks: detected, alignment, beatsPerBar: options.beatsPerBar || 4,
+    meterVerified: options.meterVerified || false, version: 3, duration, tempoMap: segments }
 }

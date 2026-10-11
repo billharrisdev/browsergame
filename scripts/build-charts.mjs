@@ -12,11 +12,13 @@ await mkdir(new URL('public/charts/', root), { recursive: true })
 for (const track of tracks) {
   const pcm = execFileSync('ffmpeg', ['-v', 'error', '-i', fileURLToPath(new URL(`public/music/${track.id}.mp3`, root)), '-ac', '1', '-ar', '22050', '-f', 'f32le', 'pipe:1'], { maxBuffer: 160 * 1024 * 1024 })
   const samples = new Float32Array(pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength))
-  const chart = buildSongChart(samples, 22050, track.tempoSource === 'analysis' ? undefined : track.bpm || undefined)
-  chart.provenance = 'Generated from decoded recording; bass/high-band attacks, adaptive tempo grid, silence gating. Not manually authored.'
+  const chart = buildSongChart(samples, 22050, track.tempoSource === 'analysis' ? undefined : track.bpm || undefined, {
+    offset: track.beatOffset, beatsPerBar: track.beatsPerBar, meterVerified: track.meterVerified, tempoMap: track.tempoMap
+  })
+  chart.provenance = 'Stable musical pulse with fractional tempo/phase fit. Attacks diagnose alignment and active measures; beats are not snapped to attacks. Not listening-verified.'
   if (!track.bpm || track.tempoSource === 'analysis') { track.bpm = chart.bpm; track.tempoSource = 'analysis' }
   track.duration = Math.round(chart.duration)
   await writeFile(new URL(`public/charts/${track.id}.json`, root), JSON.stringify(chart))
-  console.log(`${track.title}: ${chart.bpm} BPM, ${chart.notes.length} attacks, ${track.duration}s`)
+  console.log(`${track.title}: ${chart.bpm} BPM, ${chart.notes.length} active beats; residual ms beginning/middle/end: ${chart.alignment.map(section => section.meanResidualMs).join('/')}`)
 }
 await writeFile(new URL('lib/music/tracks.json', root), JSON.stringify(tracks, null, 2) + '\n')

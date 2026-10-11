@@ -156,6 +156,36 @@ a { color: var(--mint); }
 .target-input { position: absolute; border: 0; border-radius: 50%; padding: 0; background: transparent; pointer-events: auto; touch-action: none; }
 .target-input:focus-visible { outline: 3px solid #fff; outline-offset: 6px; }
 .credit-notice { color: #93a9c3; font-size: 11px; line-height: 1.8; }
+.beat-counter { position: fixed; right: 24px; top: 104px; width: 200px; z-index: 3; padding: 12px 14px; border: 1px solid #3b5267; border-radius: 10px; background: #101e30e8; }
+.beat-counter.on-beat { border-color: #5df3d199; }
+.beat-counter-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: #92a9bf; font: 9px monospace; }
+.metronome-toggle { border: 0; background: transparent; color: var(--mint); padding: 2px; font: 9px monospace; }
+.beat-counter-number { font: bold 30px monospace; color: var(--mint); padding: 6px 0; }
+.beat-counter-number small { font-size: 16px; padding-left: 4px; }
+.beat-counter-number span { color: #647f99; font-size: 14px; margin-left: 8px; }
+.beat-subdivisions { display: flex; gap: 3px; }
+.beat-subdivisions i { flex: 1; font: 9px monospace; text-align: center; padding: 4px 0; border-radius: 2px; color: #8ba0b8; background: #203149; }
+.beat-subdivisions i.active { color: #092721; background: var(--mint); }
+.beat-counter-caption { display: block; margin-top: 7px; color: #7e96ad; font: 8px monospace; }
+.sticking-panel { position: fixed; top: 111px; left: 50%; transform: translateX(-50%); z-index: 2; text-align: center; width: 350px; pointer-events: none; }
+.sticking-panel .eyebrow { font-size: 8px; letter-spacing: 1.5px; }
+.sticking-panel small, .sticking-panel p { display: block; font: 9px monospace; color: #8ba3bb; margin: 6px 0; }
+.sticking-sequence { display: flex; justify-content: center; gap: 6px; margin-top: 6px; }
+.sticking-sequence span { font: bold 17px monospace; width: 30px; padding: 4px 0; border: 1px solid #334a62; border-radius: 4px; background: #111f31; opacity: .6; }
+.stick-L { --stick-color: #8ebfff; color: #8ebfff; }.stick-R { --stick-color: #c3a0ff; color: #c3a0ff; }
+.sticking-sequence span.current { opacity: 1; border-color: var(--stick-color); background: #24364d; }
+.sticking-sequence .phrase-start { margin-left: 8px; }
+.stick-controls { position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; z-index: 3; }
+.stick-pad { display: flex; gap: 12px; align-items: center; text-align: left; padding: 10px 16px; border: 1px solid #3b4e68; border-radius: 8px; background: #101e30ef; touch-action: none; }
+.stick-pad strong { font: bold 22px monospace; }
+.stick-pad span { font-size: 10px; white-space: nowrap; }
+.stick-pad small { display: block; color: #819ab1; font-size: 8px; margin-top: 4px; }
+.stick-pad.expected { border-color: var(--stick-color); }.stick-pad.pressed { background: #344963; box-shadow: 0 0 12px #8ebfff33; }
+.timing-feedback { top: 175px; max-width: 720px; margin: auto; font-size: 12px; padding: 0 12px; }
+.rhythm-footer { bottom: 20px; }
+@media (max-width: 1000px) and (min-width: 681px) { .sticking-panel { left: 36%; width: 320px; } .beat-counter { width: 180px; right: 18px; } }
+@media (max-width: 680px) { .beat-counter { top: 120px; right: 12px; width: 160px; padding: 8px 10px; } .beat-counter-number { font-size: 23px; padding: 4px 0; } .beat-counter-caption { font-size: 7px; } .beat-counter-heading { font-size: 8px; } .beat-subdivisions { gap: 2px; } .beat-subdivisions i { font-size: 7px; } .sticking-panel { top: 197px; left: 50%; width: 320px; } .sticking-panel .eyebrow { font-size: 7px; } .sticking-sequence span { font-size: 14px; padding: 3px 0; } .sticking-panel small { font-size: 7px; margin-top: 3px; } .timing-feedback { top: 250px; font-size: 10px; line-height: 1.4; padding: 0 18px; } .stick-controls { bottom: 101px; gap: 8px; } .stick-pad { padding: 8px 12px; gap: 8px; } .stick-pad span { font-size: 8px; } .stick-pad small { font-size: 7px; } .stick-pad strong { font-size: 19px; } .rhythm-footer { bottom: 14px; gap: 7px; } .judgment-counts { flex-wrap: wrap; } .judgment-counts div { flex: 1 0 26%; } }
+@media (max-height: 500px) { .beat-counter { top: 70px; right: 12px; width: 150px; padding: 6px 9px; } .beat-counter-number { font-size: 20px; padding: 2px 0; } .beat-counter-caption { margin-top: 3px; font-size: 7px; } .beat-subdivisions i { padding: 2px 0; font-size: 7px; } .sticking-panel { top: 74px; left: 43%; width: 320px; } .sticking-sequence span { font-size: 13px; padding: 2px 0; } .sticking-panel small { font-size: 7px; margin: 2px; } .timing-feedback { top: 139px; font-size: 9px; } .stick-controls { bottom: 54px; } .stick-pad { padding: 5px 10px; } .stick-pad strong { font-size: 16px; } .stick-pad small { display: none; } .stick-pad span { font-size: 8px; } .rhythm-footer { bottom: 10px; } }
 @media (min-width: 1500px) { .library-layout { margin-top: 80px; } .track-list { max-height: 540px; } }
 @media (max-width: 1000px) { .live-tag { display: none; } .library-layout { grid-template-columns: .8fr 1.2fr; gap: 25px; } .track-meta { display: none; } .hero-panel h1 { letter-spacing: -2px; } .play-hud { gap: 14px; padding: 18px; } .health-stat { width: 80px; } .play-help { display: none; } }
 @media (max-width: 680px) { .library-screen { padding: 20px 16px 30px; } .header-actions { gap: 14px; } .wordmark { font-size: 26px; } .wordmark span { font-size: 8px; } .library-layout { grid-template-columns: 1fr; margin-top: 32px; gap: 28px; } .hero-panel h1 { font-size: 52px; margin: 12px 0; } .hero-copy { font-size: 13px; max-width: none; } .orbit-art { display: none; } .how-to { padding-top: 16px; margin-top: 20px; max-width: none; } .track-list { max-height: 375px; } .track-meta { display: block; } .track-details strong { font-size: 12px; } .track-details small { font-size: 9px; } .track-select { gap: 9px; } .track-art { width: 34px; height: 34px; } .preview-button { margin-right: 8px; } .play-hud { flex-wrap: wrap; gap: 8px; padding: 12px; } .now-playing { flex-basis: 100%; } .now-playing strong { font-size: 13px; } .now-playing .eyebrow { font-size: 8px; } .hud-stat { flex: 1; } .hud-stat strong { font-size: 18px; } .health-stat { width: 62px; } .health-stat span { font-size: 7px; letter-spacing: 0; } .health-track { margin-top: 9px; } .play-hud .small-button { padding: 8px; font-size: 11px; } .song-progress { top: 108px; } .timing-feedback { top: 130px; font-size: 11px; } .play-footer { bottom: 12px; left: 12px; right: 12px; flex-direction: column; gap: 10px; } .mode-button { padding: 10px 14px; } .time-display { font-size: 10px; } .overlay-card { padding: 26px 18px; } .overlay-card h2 { font-size: 28px; } .result-score strong { font-size: 38px; } }
@@ -163,3 +193,8 @@ a { color: var(--mint); }
 @media (max-width: 680px) { .rhythm-footer { bottom: 18px; } .timing-panel { width: min(340px, 85vw); } .accuracy-stat strong { font-size: 14px; } .accuracy-stat span { font-size: 8px; letter-spacing: 0; } .play-hud { gap: 7px; } .timing-feedback { padding: 0 12px; top: 120px; font-size: 10px; } .judgment-counts { gap: 8px; } .genre-filters { gap: 6px; } .genre-filters button { padding: 6px 10px; } }
 @media (max-height: 500px) { .play-hud { flex-wrap: nowrap; padding: 10px 16px; gap: 12px; } .now-playing { flex-basis: auto; } .now-playing strong { font-size: 12px; } .now-playing .eyebrow { font-size: 7px; } .song-progress { top: 59px; } .timing-feedback { top: 67px; font-size: 10px; } .rhythm-footer { bottom: 12px; flex-direction: row; } .timing-caption { margin-top: 5px; } .play-help { display: none; } .timing-panel { width: 280px; } .overlay-card { padding: 18px; max-height: 90svh; overflow: auto; } .countdown-overlay strong { font-size: 55px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+/* Final rhythm layout overrides the shared responsive HUD defaults. */
+.metronome-setting { display: flex; gap: 10px; align-items: center; font-size: 13px; margin: 20px 0; }
+.metronome-setting input { accent-color: var(--mint); }
+@media (max-width: 680px) { .sticking-panel { top: 225px; } .timing-feedback { top: 285px; padding: 0 18px; line-height: 1.4; } .rhythm-footer { bottom: 14px; gap: 7px; } }
+@media (max-height: 500px) { .sticking-panel { top: 74px; } .timing-feedback { top: 139px; } .rhythm-footer { bottom: 10px; } }
