@@ -33,10 +33,9 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build -- --base-href /audio/
-
-      - name: Add 404 fallback (SPA)
-        run: cp dist/browsergame/browser/index.html dist/browsergame/browser/404.html
+        env:
+          NEXT_PUBLIC_BASE_PATH: /browsergame
+        run: npm run build
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -44,7 +43,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist/audio-app/browser
+          path: out
 
   deploy:
     needs: build

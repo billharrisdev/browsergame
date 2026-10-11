@@ -28,7 +28,8 @@ export const tracks = (catalog as Track[]).map(track => ({ ...track, artist: tra
 export function songsForLevel(level: LevelId, list: Track[] = tracks) {
   return filterSongs(level, list)
 }
+export const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
 export const musicLicense = 'https://creativecommons.org/licenses/by/4.0/'
 export const trackPage = (track: Track) => track.source || `https://incompetech.com/music/royalty-free/index.html?isrc=${track.isrc}`
-export const trackAudio = (track: Track) => `/music/${track.id}.mp3`
-export const trackChart = (track: Track) => `/charts/${track.id}.json`
+export const trackAudio = (track: Track) => `${basePath}/music/${track.id}.mp3`
+export const trackChart = (track: Track) => `${basePath}/charts/${track.id}.json`

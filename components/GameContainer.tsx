@@ -3,7 +3,7 @@ import GameCanvas from './GameCanvas'
 import GameUI, { formatTime } from './GameUI'
 import BeatCheck from './BeatCheck'
 import { FrequencyFrontierGame, initialSnapshot } from '../lib/game-engine'
-import { tracks, trackAudio, trackChart, trackPage, musicLicense } from '../lib/music'
+import { tracks, trackAudio, trackChart, trackPage, musicLicense, basePath } from '../lib/music'
 import { levelChoices, levelsFor, songsForLevel, uploadLevels, type LevelId } from '../lib/music/levels'
 
 export default function GameContainer() {
@@ -197,7 +197,7 @@ export default function GameContainer() {
     <GameCanvas ref={canvasRef} />
     <audio ref={previewRef} onEnded={() => setPreviewId(null)} onTimeUpdate={() => { if ((previewRef.current?.currentTime || 0) >= 20) stopPreview() }} preload="none" />
     {snapshot.state === 'menu' ? <div className="library-screen">
-      <header className="library-header"><a className="wordmark" href="/">FF<span>FREQUENCY<br />FRONTIER</span></a><div className="header-actions"><span className="live-tag">A WORLD BUILT FROM SOUND</span><button className="text-button" onClick={() => openDialog('settings')}>Settings</button><button className="text-button" onClick={() => openDialog('credits')}>Music credits</button></div></header>
+      <header className="library-header"><a className="wordmark" href={`${basePath}/`}>FF<span>FREQUENCY<br />FRONTIER</span></a><div className="header-actions"><span className="live-tag">A WORLD BUILT FROM SOUND</span><button className="text-button" onClick={() => openDialog('settings')}>Settings</button><button className="text-button" onClick={() => openDialog('credits')}>Music credits</button></div></header>
       <section className="library-layout">
         <div className="hero-panel">
           <span className="eyebrow">POINT. CLICK. FIND THE POCKET.</span>
