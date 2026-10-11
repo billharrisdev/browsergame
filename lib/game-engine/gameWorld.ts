@@ -3,14 +3,14 @@ import { RunScore } from './scoring'
 
 export interface BeatTarget {
   id: number; time: number; x: number; y: number; resolved: boolean
-  hand: Stick | null; pattern: 'Pulse' | 'Alternating' | 'Paradiddle' | 'Free'; step: number; window: number
+  hand: Stick | null; pattern: 'Pulse' | 'Alternating' | 'Paradiddle' | 'Free' | 'Swing'; step: number; window: number
   timedOut?: boolean; comboBeforeMiss?: number
 }
 export interface HitResult {
   grade: Judgment; timing?: Judgment; errorMs: number | null; x: number; y: number; time: number; targetId?: number
   expectedHand?: Stick | null; actualHand?: Stick | null
 }
-export const approachTime = (difficulty: string) => difficulty === 'Easy' ? 1.2 : difficulty === 'Triplet' ? 0.9 : difficulty === 'Hard' || difficulty === 'Sixteenth' ? 0.75 : 1
+export const approachTime = (difficulty: string) => difficulty === 'Easy' ? 1.2 : difficulty === 'Triplet' || difficulty === 'Swing' ? 0.9 : difficulty === 'Hard' || difficulty === 'Sixteenth' ? 0.75 : 1
 export function describeHit(hit: HitResult) {
   const timing = describeTiming(hit.timing || hit.grade, hit.errorMs)
   if (hit.grade === 'Wrong stick') return `${timing} · Wrong stick: expected ${hit.expectedHand}, used ${hit.actualHand || 'no stick'}`
@@ -19,7 +19,7 @@ export function describeHit(hit: HitResult) {
 
 export function createTargets(map: BeatMap, duration: number, difficulty: string): BeatTarget[] {
   const division = subdivisionsFor(difficulty)
-  const freeForm = difficulty === 'Easy' || difficulty === 'Triplet'
+  const freeForm = difficulty === 'Easy' || difficulty === 'Triplet' || difficulty === 'Swing'
   const meter = map.beatsPerBar || 4
   const active = new Set((map.notes || map.beats).map(time => Math.round(time * 1000000)))
   const route = [[0.2, 0.27], [0.5, 0.22], [0.8, 0.34], [0.77, 0.72], [0.47, 0.77], [0.2, 0.67]]
@@ -33,8 +33,9 @@ export function createTargets(map: BeatMap, duration: number, difficulty: string
     // dropping individual strokes when the recording has no transient there.
     if (!map.beats.slice(barStart, barStart + meter).some(time => active.has(Math.round(time * 1000000)))) continue
     const interval = beatInterval(map, beat)
-    for (let sub = 0; sub < division; sub++) {
-      const time = map.beats[beat] + interval * sub / division
+    const offsets = difficulty === 'Swing' ? [0, 2 / 3] : Array.from({ length: division }, (_, sub) => sub / division)
+    for (let sub = 0; sub < offsets.length; sub++) {
+      const time = map.beats[beat] + interval * offsets[sub]
       if (time >= duration - 0.4) continue
       const slot = (beat - firstBeat) * division + sub
       const intro = !freeForm && slot < introSlots
@@ -42,7 +43,7 @@ export function createTargets(map: BeatMap, duration: number, difficulty: string
       const hand = freeForm ? null : intro ? (slot % 2 ? 'L' : 'R') : paradiddle[step]
       const position = hand ? [hand === 'L' ? 0.32 : 0.68, 0.5] : route[targets.length % route.length]
       targets.push({ id: targets.length + 1, time, x: position[0], y: position[1], hand, step,
-        pattern: difficulty === 'Triplet' ? 'Free' : difficulty === 'Easy' ? 'Pulse' : intro ? 'Alternating' : 'Paradiddle', window: hitWindow, resolved: false })
+        pattern: difficulty === 'Swing' ? 'Swing' : difficulty === 'Triplet' ? 'Free' : difficulty === 'Easy' ? 'Pulse' : intro ? 'Alternating' : 'Paradiddle', window: hitWindow, resolved: false })
     }
   }
   targets.forEach((target, index) => {

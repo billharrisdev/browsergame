@@ -25,7 +25,7 @@ export default function GameUI({ snapshot: s, title, onPause, onResume, onRestar
   const rank = s.accuracy >= 95 ? 'S' : s.accuracy >= 80 ? 'A' : s.accuracy >= 65 ? 'B' : 'C'
   const feedback = s.feedback
   const error = feedback?.errorMs
-  const labels = subdivisionLabels(s.division)
+  const labels = subdivisionLabels(s.division, s.level === 'Swing')
   const meterLimit = hitWindow * 1000
   const meterPosition = (value: number) => 50 + Math.max(-meterLimit, Math.min(meterLimit, value)) / meterLimit * 50
   const zone = (windowMs: number) => ({ left: `${meterPosition(-windowMs)}%`, right: `${100 - meterPosition(windowMs)}%` })
@@ -53,8 +53,8 @@ export default function GameUI({ snapshot: s, title, onPause, onResume, onRestar
       <small className="beat-counter-caption">Cycle {s.beat.bar || '—'} · {s.meterVerified ? `${s.meter}/4 meter` : 'estimated grouping'}</small>
     </aside>
     <div className="sticking-panel" aria-label="Sticking pattern">
-      <span className="eyebrow">{s.pattern === 'Free' ? 'LEVEL 3 · TRIPLET FEEL' : s.pattern === 'Pulse' ? 'LEVEL 1 · QUARTER-NOTE PULSE' : s.pattern === 'Alternating' ? 'LEVEL 2 · ALTERNATE FIRST' : 'LEVEL 2 · EIGHTH-NOTE PARADIDDLE'}</span>
-      {s.pattern === 'Free' ? <p>Free form · any pad · any stick</p> : s.patternSteps.length > 0 ? <div className="sticking-sequence">{s.patternSteps.map((hand, index) => <span key={index} className={`stick-${hand} ${index === s.patternStep ? 'current' : ''} ${index === 4 ? 'phrase-start' : ''}`}>{hand}</span>)}</div> : <p>Either stick · aim and click, or use Ctrl</p>}
+      <span className="eyebrow">{s.pattern === 'Swing' ? 'LEVEL 4 · SWING TIME' : s.pattern === 'Free' ? 'LEVEL 3 · TRIPLET FEEL' : s.pattern === 'Pulse' ? 'LEVEL 1 · QUARTER-NOTE PULSE' : s.pattern === 'Alternating' ? 'LEVEL 2 · ALTERNATE FIRST' : 'LEVEL 2 · EIGHTH-NOTE PARADIDDLE'}</span>
+      {s.pattern === 'Swing' ? <p>Long-short eighths · 1 a · any pad</p> : s.pattern === 'Free' ? <p>Free form · any pad · any stick</p> : s.patternSteps.length > 0 ? <div className="sticking-sequence">{s.patternSteps.map((hand, index) => <span key={index} className={`stick-${hand} ${index === s.patternStep ? 'current' : ''} ${index === 4 ? 'phrase-start' : ''}`}>{hand}</span>)}</div> : <p>Either stick · aim and click, or use Ctrl</p>}
       {s.pattern === 'Alternating' && <small>Two practice cycles, then R L R R · L R L L</small>}
     </div>
     <div className="timing-feedback" role="status" aria-live="polite" style={{ color: feedback ? judgmentColors[feedback.grade] : undefined }}>{feedback ? describeHit(feedback) : 'Hit when the approach ring closes. Ctrl strikes the next target.'}</div>

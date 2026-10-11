@@ -10,6 +10,7 @@ require.extensions['.ts'] = (module, filename) => {
 }
 const { analyzeBeats, buildSongChart, makeBeatGrid, makeTempoGrid, beatAccent, beatPosition, controlStick, nearestBeatDistance, paradiddle, timingGrade, timingWindows, describeTiming } = require('../lib/game-engine/rhythm.ts')
 const { songsForLevel, levelsFor } = require('../lib/music/levels.ts')
+const { checkClicks, heardBpm } = require('../lib/game-engine/beatCheck.ts')
 const { createTargets, GameWorld } = require('../lib/game-engine/gameWorld.ts')
 const { RunScore } = require('../lib/game-engine/scoring.ts')
 const { AudioProcessor } = require('../lib/game-engine/audioProcessor.ts')
@@ -347,6 +348,31 @@ test('dense hits cannot steal the next stroke while held doubles still require s
   assert.equal(world.strike(next.hand, next.time).grade, 'Perfect')
 })
 
+test('beat check can compare pulse, half-time, and swing double-time without changing the chart', () => {
+  const beats = [0, 0.5, 1, 1.5]
+  assert.deepEqual(checkClicks(beats, 4, 'pulse').map(hit => hit.time), beats)
+  assert.deepEqual(checkClicks(beats, 4, 'half').map(hit => hit.time), [0, 1])
+  assert.equal(heardBpm(118, 'swing-double'), 236)
+  const swing = checkClicks([1], 4, 'swing-double')
+  assert.ok(Math.abs(swing[1].time - (1 + 0.25 * 2 / 3)) < 1e-8)
+  assert.equal(swing[0].accent, true)
+  assert.equal(swing[1].accent, false)
+  assert.deepEqual(beats, [0, 0.5, 1, 1.5])
+})
+
+test('level four uses long-short swing eighths and the counter switches at two-thirds', () => {
+  const map = { bpm: 120, offset: 0, beats: makeBeatGrid(8, 120, 0), confidence: 1, beatsPerBar: 4 }
+  const targets = createTargets(map, 8, 'Swing')
+  assert.equal(targets[0].time, 2)
+  assert.ok(Math.abs(targets[1].time - (2 + 0.5 * 2 / 3)) < 1e-8)
+  assert.ok(Math.abs(targets[2].time - 2.5) < 1e-8)
+  assert.ok(targets.every(target => target.hand === null && target.pattern === 'Swing'))
+  assert.equal(beatPosition(2.3, map, 2, true).subdivision, 0)
+  assert.equal(beatPosition(2.34, map, 2, true).subdivision, 1)
+  const world = new GameWorld(map, 8, 'Swing')
+  assert.equal(world.strike('R', targets[1].time).grade, 'Perfect')
+})
+
 test('level three plays every triplet on any pad and accepts either stick', () => {
   const map = { bpm: 120, offset: 0, beats: makeBeatGrid(8, 120, 0), confidence: 1, beatsPerBar: 4 }
   const targets = createTargets(map, 8, 'Triplet')
@@ -362,12 +388,13 @@ test('level three plays every triplet on any pad and accepts either stick', () =
 test('song lists follow the selected level and future levels stay empty', () => {
   const catalog = require('../lib/music/tracks.json')
   const triplet = songsForLevel('Triplet', catalog).map(track => track.id)
-  assert.deepEqual(triplet.sort(), ['bebop-25', 'big-swing-band'])
+  assert.deepEqual(triplet, ['bebop-25'])
+  assert.deepEqual(songsForLevel('Swing', catalog).map(track => track.id), ['big-swing-band'])
   assert.ok(!songsForLevel('Normal', catalog).some(track => track.id === 'bebop-25'))
   assert.ok(songsForLevel('Easy', catalog).some(track => track.id === 'feel-good-rock'))
   assert.ok(songsForLevel('Normal', catalog).some(track => track.id === 'feel-good-rock'))
   assert.equal(songsForLevel('Easy', catalog).length, 24)
-  assert.deepEqual(songsForLevel('Soon', catalog), [])
+  assert.ok(!songsForLevel('Swing', catalog).some(track => track.id === 'bebop-25'))
   assert.deepEqual(songsForLevel('Sixteenth', catalog), [])
   assert.deepEqual(levelsFor({ id: 'custom', levels: ['Easy', 'Normal', 'Triplet'] }), ['Easy', 'Normal', 'Triplet'])
 })

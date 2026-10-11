@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import GameCanvas from './GameCanvas'
 import GameUI, { formatTime } from './GameUI'
+import BeatCheck from './BeatCheck'
 import { FrequencyFrontierGame, initialSnapshot } from '../lib/game-engine'
 import { tracks, trackAudio, trackChart, trackPage, musicLicense } from '../lib/music'
 import { levelChoices, levelsFor, songsForLevel, uploadLevels, type LevelId } from '../lib/music/levels'
@@ -23,6 +24,8 @@ export default function GameContainer() {
   const [timingOffset, setTimingOffset] = useState(0)
   const [metronome, setMetronome] = useState(false)
   const [bests, setBests] = useState<Record<string, number>>({})
+  const [debug, setDebug] = useState(false)
+  const [checkId, setCheckId] = useState<string | null>(null)
   const gameRef = useRef<FrequencyFrontierGame | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const previewRef = useRef<HTMLAudioElement>(null)
@@ -50,6 +53,11 @@ export default function GameContainer() {
     setReducedMotion(preference.matches)
     const change = () => setReducedMotion(preference.matches)
     preference.addEventListener('change', change)
+    const params = new URLSearchParams(window.location.search)
+    const query = params.get('debug') ?? params.get('beatcheck')
+    if (query === '0') localStorage.removeItem('frequency-frontier-debug')
+    else if (query === '1' || query === 'true') localStorage.setItem('frequency-frontier-debug', '1')
+    setDebug(localStorage.getItem('frequency-frontier-debug') === '1')
     try { setBests(JSON.parse(localStorage.getItem('frequency-frontier-bests') || '{}')) } catch {}
     try {
       const saved = JSON.parse(localStorage.getItem('frequency-frontier-timing') || '{}')
@@ -215,22 +223,25 @@ export default function GameContainer() {
             {visibleTracks.map((track, index) => <div key={track.id} className={`track-row ${!uploaded && selected.id === track.id ? 'active' : ''}`}>
               <button className="track-select" disabled={busy} aria-pressed={!uploaded && selected.id === track.id} onClick={() => { stopPreview(); setUploaded(null); setSelectedId(track.id); setError('') }}><span className={`track-art art-${index % 4}`}>{String(index + 1).padStart(2, '0')}</span><span className="track-details"><strong>{track.title}</strong><small>{track.genre || track.style} · {track.artist}</small></span><span className="track-meta"><b>{track.bpm ? `${Math.round(track.bpm)} BPM` : 'AUTO TEMPO'}</b><small>{formatTime(track.duration)}</small></span></button>
               <button className="preview-button" disabled={busy} onClick={() => preview(track.id)} aria-label={`${previewId === track.id ? 'Stop preview of' : 'Preview'} ${track.title}`}>{previewId === track.id ? '■' : '▶'}</button>
+              {debug && <button className="check-button" disabled={busy} onClick={() => { stopPreview(); setCheckId(track.id) }}>Check</button>}
             </div>)}
           </div>
           <div className="upload-row"><button className="text-button" disabled={busy} onClick={() => fileRef.current?.click()}>＋ Bring your own music</button><span>{uploaded ? uploaded.name : 'Audio stays on your device'}</span><input ref={fileRef} type="file" accept="audio/*" hidden onChange={event => { upload(event.target.files?.[0]); event.target.value = '' }} /></div>
           <p className="license-note">Free with attribution · CC BY 4.0 · Music credits included</p>
         </div>
         <aside className="landing-support">
-          <details className="how-to"><summary>How to play &amp; practice levels</summary><p><b>01</b> Listen to the count-in and follow the corner beat counter.</p><p><b>02</b> Aim + left/right click, or strike the next target with Left/Right Ctrl.</p><p><b>03</b> Level 2: R L R R · L R L L. Level 3: free-form triplets, any pad.</p><small>The song list shows only recordings that fit the selected level. Lights bloom harder on beat 1. Reduced motion keeps a still color wash.</small></details>
+          <details className="how-to"><summary>How to play &amp; practice levels</summary><p><b>01</b> Listen to the count-in and follow the corner beat counter.</p><p><b>02</b> Aim + left/right click, or strike the next target with Left/Right Ctrl.</p><p><b>03</b> Level 2: paradiddle. Level 3: triplets. Level 4: swung 1 a.</p><small>The song list shows only recordings that fit the selected level. Lights bloom harder on beat 1. Reduced motion keeps a still color wash.</small></details>
           <div className="orbit-art target-art" aria-hidden="true"><div className="demo-approach" /><div className="orbit-core">1</div><span className="orbit-label">WAIT FOR THE RING. THEN CLICK.</span></div>
         </aside>
       </section>
     </div> : <GameUI snapshot={snapshot} title={title} generated={!!uploaded} best={bests[scoreKey] || 0} metronome={metronome} onMetronome={() => setMetronome(previous => !previous)} onStick={(hand, stamp) => gameRef.current?.strikeStick(hand, stamp)} onHit={(x, y, stamp, hand) => gameRef.current?.clickAt(x, y, stamp, hand)} onPause={() => gameRef.current?.pauseGame()} onResume={() => { void gameRef.current?.resumeGame() }} onRestart={() => { void gameRef.current?.restartGame().catch(() => setError('Audio could not restart. Try loading the song again.')) }} onMenu={() => gameRef.current?.returnToMenu()} onSettings={() => openDialog('settings')} />}
     <dialog ref={dialogRef} className="settings-dialog" aria-label={dialog === 'credits' ? 'Music credits' : 'Game settings'} onCancel={() => setDialog(null)} onClick={event => { if (event.target === event.currentTarget) setDialog(null) }}>
       <div className="dialog-header"><h2>{dialog === 'credits' ? 'Music credits' : 'Make it your own'}</h2><button className="small-button" onClick={() => setDialog(null)} autoFocus>Close</button></div>
+      {dialog === 'settings' && debug && <label className="metronome-setting"><input type="checkbox" checked={debug} onChange={event => { localStorage.removeItem('frequency-frontier-debug'); setDebug(false); setCheckId(null) }} /> Beat check tools</label>}
       {dialog === 'settings' && <label className="metronome-setting"><input type="checkbox" checked={metronome} onChange={event => setMetronome(event.target.checked)} /> Beat click / metronome</label>}
       {dialog === 'credits' && <p className="credit-notice">Eyesplit © 2016 by Shane Ivers. Music: Eyesplit by Shane Ivers — silvermansound.com.</p>}
       {dialog === 'credits' ? <div className="credits-content"><p>All recordings licensed under <a href={musicLicense} target="_blank" rel="noreferrer">Creative Commons: By Attribution 4.0</a>. Music by <a href="https://audionautix.com" target="_blank" rel="noreferrer">Jason Shaw / Audionautix.com</a>, <a href="https://www.silvermansound.com" target="_blank" rel="noreferrer">Shane Ivers / Silverman Sound</a>, and <a href="https://incompetech.com" target="_blank" rel="noreferrer">Kevin MacLeod / Incompetech</a>, with Alexander Nakarada featured on Feral Angel Waltz.</p><p>Recordings are unmodified. The game generates synchronized targets and visuals. No artist endorsement is implied.</p><ul>{tracks.map(track => <li key={track.id}><a href={trackPage(track)} target="_blank" rel="noreferrer">“{track.title}”</a> — {track.artist}{track.isrc ? ` · ${track.isrc}` : ''} · CC BY 4.0</li>)}</ul></div> : <div className="settings-content"><label>Music volume <span>{Math.round(volume * 100)}%</span><input type="range" min="0" max="1" step="0.05" value={volume} onChange={event => setVolume(Number(event.target.value))} /></label><label>Visual intensity <span>{Math.round(intensity * 100)}%</span><input type="range" min="0" max="1" step="0.05" value={intensity} onChange={event => setIntensity(Number(event.target.value))} /></label><label className="checkbox-label"><input type="checkbox" checked={reducedMotion} onChange={event => setReducedMotion(event.target.checked)} /> Reduced motion</label><label>Timing offset <span>{timingOffset > 0 ? '+' : ''}{timingOffset} ms</span><input type="range" min="-200" max="200" step="10" value={timingOffset} onChange={event => setTimingOffset(Number(event.target.value))} /></label><p>Automatic output-latency compensation is active. Positive offset advances targets and judges taps later; negative offset moves targets back and judges taps earlier. Adjust until ring closure matches the audible beat.</p><p>Reduced motion removes decorative flashes and hit expansions. Approach rings stay visible because they are the timing cue.</p>{snapshot.state !== 'menu' && <p>Close settings, then Resume to continue your run.</p>}</div>}
     </dialog>
+    {debug && checkId && <BeatCheck track={tracks.find(item => item.id === checkId) || selected} onClose={() => setCheckId(null)} />}
   </main>
 }

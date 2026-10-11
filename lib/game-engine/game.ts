@@ -241,7 +241,7 @@ export class FrequencyFrontierGame {
     const phase = ((map.offset % period) + period) % period - this.timingOffset / 1000
     const pattern = next?.pattern || 'Pulse'
     const bands = timingWindows(next?.window ?? hitWindow)
-    const beat = beatPosition(this.time, map, division)
+    const beat = beatPosition(this.time, map, division, this.difficulty === 'Swing')
     this.onUpdate?.({
       state: this.gameState, score: stats?.score || 0, combo: stats?.combo || 0, multiplier: stats?.multiplier || 1,
       progress: Math.max(0, Math.min(this.audioProcessor.duration, this.time)), duration: this.audioProcessor.duration,
@@ -254,7 +254,7 @@ export class FrequencyFrontierGame {
         id: target.id, x: field.x + target.x * field.width, y: field.y + target.y * field.height, radius: field.radius, hand: target.hand
       })),
       beat, meter: map.beatsPerBar || 4, meterVerified: !!map.meterVerified, division,
-      pattern, patternSteps: pattern === 'Pulse' ? [] : pattern === 'Alternating' ? ['R', 'L', 'R', 'L', 'R', 'L', 'R', 'L'] : paradiddle,
+      pattern, patternSteps: pattern === 'Alternating' ? ['R', 'L', 'R', 'L', 'R', 'L', 'R', 'L'] : pattern === 'Paradiddle' ? paradiddle : [],
       patternStep: next?.step || 0, expectedStick: next?.hand || null,
       pressed: { L: this.heldSticks.has('L') || performance.now() < this.flashUntil.L, R: this.heldSticks.has('R') || performance.now() < this.flashUntil.R },
       timingAccuracy: stats?.timingAccuracy ?? 100, stickAccuracy: stats?.stickAccuracy ?? 100,

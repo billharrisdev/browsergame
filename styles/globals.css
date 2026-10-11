@@ -58,6 +58,18 @@ a { color: var(--mint); }
 .track-meta small { color: #7e90a9; font-size: 10px; margin-top: 6px; }
 .preview-button { flex-shrink: 0; width: 32px; height: 32px; border: 1px solid #3b4b63; border-radius: 50%; background: transparent; color: #a6bdd4; font-size: 10px; margin-right: 12px; }
 .preview-button:hover { color: var(--mint); border-color: var(--mint); }
+.check-button { flex-shrink: 0; margin-right: 10px; border: 1px solid #5df3d166; border-radius: 6px; background: transparent; color: var(--mint); font-size: 10px; padding: 6px 8px; }
+.beat-check-card { text-align: left; max-width: 640px; }
+.beat-check-card h2 { font-size: 22px; margin: 4px 0 0; }
+.beat-check-readout { display: flex; align-items: center; gap: 16px; margin: 18px 0; }
+.beat-check-readout strong { font: bold 64px monospace; color: var(--mint); line-height: 1; }
+.beat-check-readout span, .beat-check-card p, .beat-check-tools span { color: #93a9c3; font-size: 12px; line-height: 1.6; }
+.beat-check-card input[type=range] { width: 100%; accent-color: var(--mint); }
+.beat-check-tools { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
+.beat-nudge { display: block; margin: 16px 0; font-size: 13px; }
+.beat-nudge span { float: right; color: var(--mint); font: 12px monospace; }
+.beat-nudge input { display: block; width: 100%; margin-top: 10px; }
+.beat-check-card.flashing { box-shadow: 0 0 40px #5df3d144; }
 .upload-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 15px 0; }
 .upload-row span { color: #7286a2; font-size: 10px; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .launch-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; border: 1px solid #2e4d51; border-radius: 12px; padding: 18px; background: #14282cb3; }

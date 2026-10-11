@@ -13,8 +13,8 @@ export interface BeatMap {
   alignment?: { section: string; meanResidualMs: number; matchedBeats: number }[]
 }
 
-export const subdivisionsFor = (difficulty: string) => difficulty === 'Triplet' ? 3 : difficulty === 'Hard' || difficulty === 'Sixteenth' ? 4 : difficulty === 'Normal' ? 2 : 1
-export const subdivisionLabels = (division: number) => division === 4 ? ['', 'e', '&', 'a'] : division === 3 ? ['', 'trip', 'let'] : division === 2 ? ['', '&'] : ['']
+export const subdivisionsFor = (difficulty: string) => difficulty === 'Triplet' ? 3 : difficulty === 'Hard' || difficulty === 'Sixteenth' ? 4 : difficulty === 'Normal' || difficulty === 'Swing' ? 2 : 1
+export const subdivisionLabels = (division: number, swung = false) => swung ? ['', 'a'] : division === 4 ? ['', 'e', '&', 'a'] : division === 3 ? ['', 'trip', 'let'] : division === 2 ? ['', '&'] : ['']
 export const beatAccent = (beat: number) => beat === 1 ? 1 : beat === 3 ? 0.55 : beat > 0 ? 0.22 : 0
 export type Stick = 'L' | 'R'
 export const paradiddle: Stick[] = ['R', 'L', 'R', 'R', 'L', 'R', 'L', 'L']
@@ -37,7 +37,7 @@ export function beatInterval(map: BeatMap, index: number) {
   return 60 / (segment?.bpm || map.bpm)
 }
 
-export function beatPosition(time: number, map: BeatMap, division = 1) {
+export function beatPosition(time: number, map: BeatMap, division = 1, swung = false) {
   const beats = map.beats
   let low = 0, high = beats.length
   while (low < high) {
@@ -50,7 +50,8 @@ export function beatPosition(time: number, map: BeatMap, division = 1) {
   if (index < 0) return { total: 0, beat: 0, bar: 0, subdivision: 0, phase: 0 }
   const period = beatInterval(map, index)
   const phase = Math.max(0, Math.min(0.999999, (time - beats[index]) / period))
-  return { total: index + 1, beat: index % meter + 1, bar: Math.floor(index / meter) + 1, subdivision: Math.min(division - 1, Math.floor(phase * division + 1e-7)), phase }
+  const subdivision = swung ? (phase + 1e-7 >= 2 / 3 ? 1 : 0) : Math.min(division - 1, Math.floor(phase * division + 1e-7))
+  return { total: index + 1, beat: index % meter + 1, bar: Math.floor(index / meter) + 1, subdivision, phase }
 }
 
 // Autocorrelation identifies the pulse family. Whole-recording phase coherence
