@@ -1,6 +1,6 @@
 import { AudioProcessor } from './audioProcessor'
 import { approachTime, BeatTarget, GameWorld, HitResult } from './gameWorld'
-import { beatInterval, beatPosition, controlStick, hitWindow, Judgment, nearestBeatDistance, paradiddle, Stick, subdivisionsFor, timingWindows } from './rhythm'
+import { beatAccent, beatInterval, beatPosition, controlStick, hitWindow, Judgment, paradiddle, Stick, subdivisionsFor, timingWindows } from './rhythm'
 import { JudgmentCounts } from './scoring'
 
 export type GameState = 'menu' | 'countdown' | 'playing' | 'paused' | 'complete'
@@ -38,6 +38,7 @@ export interface GameSnapshot {
   perfectWindowMs: number
   closeWindowMs: number
   hitWindowMs: number
+  level: string
 }
 
 const defaultTiming = timingWindows()
@@ -50,7 +51,8 @@ export const initialSnapshot: GameSnapshot = {
   beat: { total: 0, beat: 0, bar: 0, subdivision: 0, phase: 0 }, meter: 4, meterVerified: false, division: 1,
   pattern: 'Pulse', patternSteps: [], patternStep: 0, expectedStick: null, pressed: { L: false, R: false },
   timingAccuracy: 100, stickAccuracy: 100, stickAttempts: 0,
-  perfectWindowMs: milliseconds(defaultTiming.perfect), closeWindowMs: milliseconds(defaultTiming.close), hitWindowMs: milliseconds(defaultTiming.hit)
+  perfectWindowMs: milliseconds(defaultTiming.perfect), closeWindowMs: milliseconds(defaultTiming.close), hitWindowMs: milliseconds(defaultTiming.hit),
+  level: 'Easy'
 }
 
 export const judgmentColors: Record<Judgment, string> = {
@@ -76,6 +78,8 @@ export class FrequencyFrontierGame {
   private feedback: HitResult | null = null
   private disposed = false
   private difficulty = 'Easy'
+  private lastBloomBeat = 0
+  private splashes: { x: number; y: number; color: string; born: number; strong: boolean }[] = []
   private heldSticks = new Set<Stick>()
   private flashUntil: Record<Stick, number> = { L: 0, R: 0 }
   private resizeObserver: ResizeObserver
@@ -255,7 +259,8 @@ export class FrequencyFrontierGame {
       pressed: { L: this.heldSticks.has('L') || performance.now() < this.flashUntil.L, R: this.heldSticks.has('R') || performance.now() < this.flashUntil.R },
       timingAccuracy: stats?.timingAccuracy ?? 100, stickAccuracy: stats?.stickAccuracy ?? 100,
       stickAttempts: (stats?.stickCorrect || 0) + (stats?.stickWrong || 0),
-      perfectWindowMs: milliseconds(bands.perfect), closeWindowMs: milliseconds(bands.close), hitWindowMs: milliseconds(bands.hit)
+      perfectWindowMs: milliseconds(bands.perfect), closeWindowMs: milliseconds(bands.close), hitWindowMs: milliseconds(bands.hit),
+      level: this.difficulty
     })
   }
 
@@ -278,6 +283,7 @@ export class FrequencyFrontierGame {
         this.emit()
       }
     }
+    if (this.gameState === 'playing' || this.gameState === 'countdown') this.syncSplashes(this.time)
     this.draw()
     if ((this.gameState === 'playing' || this.gameState === 'countdown') && now - this.lastUpdate > 50) { this.lastUpdate = now; this.emit() }
     this.frame = requestAnimationFrame(this.loop)
@@ -321,12 +327,8 @@ export class FrequencyFrontierGame {
     const time = Math.max(0, this.time)
     const motion = this.reducedMotion ? 0 : this.intensity
     const playing = this.gameState === 'playing'
-    const pulse = playing ? Math.max(0, 1 - nearestBeatDistance(time, this.audioProcessor.beatMap) / 0.14) : 0
     ctx.fillStyle = '#070d1c'; ctx.fillRect(0, 0, w, h)
-    const gradient = ctx.createRadialGradient(w * 0.5, h * 0.5, 20, w * 0.5, h * 0.5, w * 0.7)
-    gradient.addColorStop(0, `rgba(30,67,86,${0.45 + pulse * motion * 0.18})`)
-    gradient.addColorStop(1, 'rgba(7,13,28,0)')
-    ctx.fillStyle = gradient; ctx.fillRect(0, 0, w, h)
+    this.drawAtmosphere(time, motion, playing)
     ctx.strokeStyle = 'rgba(83,144,177,0.07)'; ctx.lineWidth = 1; ctx.beginPath()
     for (let x = 0; x < w; x += 60) { ctx.moveTo(x, 0); ctx.lineTo(x, h) }
     for (let y = 0; y < h; y += 60) { ctx.moveTo(0, y); ctx.lineTo(w, y) }
@@ -369,6 +371,52 @@ export class FrequencyFrontierGame {
         ctx.beginPath(); ctx.arc(x, y, field.radius + age * 65 * motion, 0, Math.PI * 2); ctx.stroke()
       }
       ctx.restore()
+    }
+  }
+
+  private syncSplashes(time: number) {
+    const beat = beatPosition(time, this.audioProcessor.beatMap, 1)
+    if (beat.total > 0 && beat.total !== this.lastBloomBeat && beat.phase < 0.12) {
+      this.lastBloomBeat = beat.total
+      const strong = beat.beat === 1 || beat.beat === 3
+      if (!this.reducedMotion && strong && this.splashes.length < 8) {
+        const colors = ['#5df3d1', '#ff4fd8', '#ffb15a', '#7aa2ff']
+        for (let i = 0; i < (beat.beat === 1 ? 3 : 1); i++) {
+          this.splashes.push({ x: 0.12 + ((beat.total * 37 + i * 53) % 76) / 100, y: 0.18 + ((beat.total * 19 + i * 29) % 62) / 100, color: colors[(beat.total + i) % colors.length], born: time, strong: beat.beat === 1 })
+        }
+      }
+    }
+    this.splashes = this.splashes.filter(splash => time - splash.born < 0.62)
+  }
+
+  private drawAtmosphere(time: number, motion: number, playing: boolean) {
+    const ctx = this.ctx, w = this.width, h = this.height
+    const beat = playing ? beatPosition(time, this.audioProcessor.beatMap, 1) : { beat: 0, phase: 1 }
+    const accent = this.reducedMotion || !playing ? 0.28 : beatAccent(beat.beat) * Math.max(0, 1 - beat.phase / (beat.beat === 1 ? 0.34 : 0.2))
+    const bloom = this.reducedMotion ? 1 : 1 + accent * this.intensity * (beat.beat === 1 ? 0.55 : 0.28)
+    const washes = [
+      { x: 0.18, y: 0.32, color: '93,243,209', radius: 0.62 },
+      { x: 0.82, y: 0.24, color: '255,79,216', radius: 0.58 },
+      { x: 0.55, y: 0.78, color: '255,177,90', radius: 0.5 }
+    ]
+    for (const wash of washes) {
+      const radius = Math.max(w, h) * wash.radius * bloom
+      const gradient = ctx.createRadialGradient(w * wash.x, h * wash.y, radius * 0.08, w * wash.x, h * wash.y, radius)
+      gradient.addColorStop(0, `rgba(${wash.color},${0.05 + accent * this.intensity * 0.16})`)
+      gradient.addColorStop(0.42, `rgba(${wash.color},${0.025 + accent * this.intensity * 0.07})`)
+      gradient.addColorStop(1, 'rgba(7,13,28,0)')
+      ctx.fillStyle = gradient
+      ctx.fillRect(0, 0, w, h)
+    }
+    if (this.reducedMotion) return
+    for (const splash of this.splashes) {
+      const age = Math.max(0, Math.min(1, (time - splash.born) / 0.62))
+      const radius = (splash.strong ? 180 : 120) * (0.35 + age) * (0.7 + this.intensity)
+      const gradient = ctx.createRadialGradient(splash.x * w, splash.y * h, 8, splash.x * w, splash.y * h, radius)
+      gradient.addColorStop(0, `${splash.color}${Math.round((1 - age) * (splash.strong ? 70 : 40)).toString(16).padStart(2, '0')}`)
+      gradient.addColorStop(1, `${splash.color}00`)
+      ctx.fillStyle = gradient
+      ctx.beginPath(); ctx.arc(splash.x * w, splash.y * h, radius, 0, Math.PI * 2); ctx.fill()
     }
   }
 

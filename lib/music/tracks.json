@@ -59,6 +59,7 @@
     "id": "bebop-25",
     "title": "Bebop 25",
     "bpm": 100,
+    "beatsPerBar": 4,
     "duration": 142,
     "style": "Fast jazz",
     "difficulty": "Hard",

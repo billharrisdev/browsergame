@@ -46,15 +46,15 @@ export default function GameUI({ snapshot: s, title, onPause, onResume, onRestar
       <button className="small-button" onClick={s.state === 'paused' ? onResume : onPause} disabled={finished}>{s.state === 'paused' ? 'Resume' : 'Pause'}</button>
     </header>
     <div className="song-progress" role="progressbar" aria-label="Song progress" aria-valuemin={0} aria-valuemax={Math.round(s.duration)} aria-valuenow={Math.round(s.progress)}><i style={{ width: `${s.duration ? s.progress / s.duration * 100 : 0}%` }} /></div>
-    <aside className={`beat-counter ${s.beat.phase < 0.16 && s.beat.total > 0 ? 'on-beat' : ''}`} aria-label="Beat counter">
+    <aside className={`beat-counter ${s.beat.phase < 0.16 && s.beat.total > 0 ? 'on-beat' : ''} ${s.beat.beat === 1 ? 'strong' : ''}`} aria-label="Beat counter">
       <div className="beat-counter-heading"><span>BEAT {s.beat.total || '—'}</span><button onClick={onMetronome} className="metronome-toggle" aria-pressed={metronome} aria-label="Toggle metronome">{metronome ? 'Click ON' : 'Click OFF'}</button></div>
       <div className="beat-counter-number">{s.beat.beat || '—'}<small>{s.beat.total > 0 ? labels[s.beat.subdivision] : ''}</small><span>/ {s.meter}</span></div>
       <div className="beat-subdivisions">{Array.from({ length: s.meter * s.division }, (_, index) => <i key={index} className={s.beat.total > 0 && index === (s.beat.beat - 1) * s.division + s.beat.subdivision ? 'active' : ''}>{index % s.division === 0 ? Math.floor(index / s.division) + 1 : labels[index % s.division]}</i>)}</div>
       <small className="beat-counter-caption">Cycle {s.beat.bar || '—'} · {s.meterVerified ? `${s.meter}/4 meter` : 'estimated grouping'}</small>
     </aside>
     <div className="sticking-panel" aria-label="Sticking pattern">
-      <span className="eyebrow">{s.pattern === 'Pulse' ? 'LEVEL 1 · QUARTER-NOTE PULSE' : s.pattern === 'Alternating' ? `LEVEL ${s.division === 2 ? '2' : '3'} · ALTERNATE FIRST` : `LEVEL ${s.division === 2 ? '2' : '3'} · ${s.division === 2 ? 'EIGHTH' : 'SIXTEENTH'}-NOTE PARADIDDLE`}</span>
-      {s.patternSteps.length > 0 ? <div className="sticking-sequence">{s.patternSteps.map((hand, index) => <span key={index} className={`stick-${hand} ${index === s.patternStep ? 'current' : ''} ${index === 4 ? 'phrase-start' : ''}`}>{hand}</span>)}</div> : <p>Either stick · aim and click, or use Ctrl</p>}
+      <span className="eyebrow">{s.pattern === 'Free' ? 'LEVEL 3 · TRIPLET FEEL' : s.pattern === 'Pulse' ? 'LEVEL 1 · QUARTER-NOTE PULSE' : s.pattern === 'Alternating' ? 'LEVEL 2 · ALTERNATE FIRST' : 'LEVEL 2 · EIGHTH-NOTE PARADIDDLE'}</span>
+      {s.pattern === 'Free' ? <p>Free form · any pad · any stick</p> : s.patternSteps.length > 0 ? <div className="sticking-sequence">{s.patternSteps.map((hand, index) => <span key={index} className={`stick-${hand} ${index === s.patternStep ? 'current' : ''} ${index === 4 ? 'phrase-start' : ''}`}>{hand}</span>)}</div> : <p>Either stick · aim and click, or use Ctrl</p>}
       {s.pattern === 'Alternating' && <small>Two practice cycles, then R L R R · L R L L</small>}
     </div>
     <div className="timing-feedback" role="status" aria-live="polite" style={{ color: feedback ? judgmentColors[feedback.grade] : undefined }}>{feedback ? describeHit(feedback) : 'Hit when the approach ring closes. Ctrl strikes the next target.'}</div>

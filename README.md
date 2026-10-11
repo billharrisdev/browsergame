@@ -20,9 +20,11 @@ the song. Browsing songs or collections preserves your selected level.
 
 | Level | Practice |
 | --- | --- |
-| 1 · Pulse | Quarter notes; either stick works |
-| 2 · Eighths | Two alternating practice cycles, then **R L R R · L R L L** in eighth notes |
-| 3 · Sixteenths | The same progression at sixteenth-note spacing |
+| 1 · Pulse | Quarter notes; either stick works. Every song |
+| 2 · Eighths | Two alternating practice cycles, then **R L R R · L R L L**. Straight-feel songs |
+| 3 · Triplets | Three equal notes per beat, free-form on any pad, any stick. Triplet-feel songs |
+| 4 · Coming soon | Placeholder; not playable |
+| 5 · Sixteenths | Reserved for a future sixteenth paradiddle; not playable |
 
 Aim with the mouse: **left-click = L**, **right-click = R**. The context menu is
 suppressed only on the active playfield. Alternatively, **Left Ctrl = L** and
@@ -36,7 +38,12 @@ break the combo, but preserve timing feedback (e.g. Perfect timing, wrong L stic
 Timing and sticking accuracy are reported separately.
 
 The upper-right counter shows total quarter-note beats, cycle position, and
-`1 & 2 & 3 & 4 &` or `1 e & a ...` subdivisions. Counter, targets, judgments, and
+`1 & 2 &`, `1 trip let`, or a future sixteenth count. Soft color washes and
+strong-beat splashes pulse hardest on beat 1, with a smaller accent on beat 3.
+Reduced motion keeps a static wash. The song list filters to recordings tagged
+for the selected level. **Bebop 25** is tagged for triplets from listening;
+**Big Swing Band** is tagged from its swing title, not a fresh listening pass.
+Uploads use a straight grid and fit levels 1 and 2. Counter, targets, judgments, and
 optional beat click share the audible-output timeline. Unverified groupings are
 marked estimated; cycle numbering is a practice grouping, not a claim that the
 recording's musical downbeat has been manually established. The metal waltz uses

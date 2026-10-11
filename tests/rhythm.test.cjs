@@ -8,7 +8,8 @@ require.extensions['.ts'] = (module, filename) => {
   const source = fs.readFileSync(filename, 'utf8')
   module._compile(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, filename)
 }
-const { analyzeBeats, buildSongChart, makeBeatGrid, makeTempoGrid, beatPosition, controlStick, nearestBeatDistance, paradiddle, timingGrade, timingWindows, describeTiming } = require('../lib/game-engine/rhythm.ts')
+const { analyzeBeats, buildSongChart, makeBeatGrid, makeTempoGrid, beatAccent, beatPosition, controlStick, nearestBeatDistance, paradiddle, timingGrade, timingWindows, describeTiming } = require('../lib/game-engine/rhythm.ts')
+const { songsForLevel, levelsFor } = require('../lib/music/levels.ts')
 const { createTargets, GameWorld } = require('../lib/game-engine/gameWorld.ts')
 const { RunScore } = require('../lib/game-engine/scoring.ts')
 const { AudioProcessor } = require('../lib/game-engine/audioProcessor.ts')
@@ -344,6 +345,37 @@ test('dense hits cannot steal the next stroke while held doubles still require s
   assert.equal(world.strike(next.hand, target.time + 0.001).grade, 'Too early')
   assert.equal(next.resolved, false)
   assert.equal(world.strike(next.hand, next.time).grade, 'Perfect')
+})
+
+test('level three plays every triplet on any pad and accepts either stick', () => {
+  const map = { bpm: 120, offset: 0, beats: makeBeatGrid(8, 120, 0), confidence: 1, beatsPerBar: 4 }
+  const targets = createTargets(map, 8, 'Triplet')
+  assert.ok(Math.abs(targets[1].time - targets[0].time - 0.5 / 3) < 1e-8)
+  assert.ok(targets.every(target => target.hand === null && target.pattern === 'Free'))
+  assert.notEqual(targets[0].x, targets[1].x)
+  const world = new GameWorld(map, 8, 'Triplet')
+  assert.equal(world.strike('L', targets[0].time).grade, 'Perfect')
+  assert.equal(world.strike('R', targets[1].time).grade, 'Perfect')
+  assert.equal(world.stats.stickWrong, 0)
+})
+
+test('song lists follow the selected level and future levels stay empty', () => {
+  const catalog = require('../lib/music/tracks.json')
+  const triplet = songsForLevel('Triplet', catalog).map(track => track.id)
+  assert.deepEqual(triplet.sort(), ['bebop-25', 'big-swing-band'])
+  assert.ok(!songsForLevel('Normal', catalog).some(track => track.id === 'bebop-25'))
+  assert.ok(songsForLevel('Easy', catalog).some(track => track.id === 'feel-good-rock'))
+  assert.ok(songsForLevel('Normal', catalog).some(track => track.id === 'feel-good-rock'))
+  assert.equal(songsForLevel('Easy', catalog).length, 24)
+  assert.deepEqual(songsForLevel('Soon', catalog), [])
+  assert.deepEqual(songsForLevel('Sixteenth', catalog), [])
+  assert.deepEqual(levelsFor({ id: 'custom', levels: ['Easy', 'Normal', 'Triplet'] }), ['Easy', 'Normal', 'Triplet'])
+})
+
+test('beat one blooms harder than beat three, which blooms harder than weak beats', () => {
+  assert.ok(beatAccent(1) > beatAccent(3))
+  assert.ok(beatAccent(3) > beatAccent(2))
+  assert.equal(beatAccent(0), 0)
 })
 
 test('left and right physical Control keys remain distinct', () => {

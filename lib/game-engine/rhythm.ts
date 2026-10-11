@@ -13,8 +13,9 @@ export interface BeatMap {
   alignment?: { section: string; meanResidualMs: number; matchedBeats: number }[]
 }
 
-export const subdivisionsFor = (difficulty: string) => difficulty === 'Hard' ? 4 : difficulty === 'Normal' ? 2 : 1
-export const subdivisionLabels = (division: number) => division === 4 ? ['', 'e', '&', 'a'] : division === 2 ? ['', '&'] : ['']
+export const subdivisionsFor = (difficulty: string) => difficulty === 'Triplet' ? 3 : difficulty === 'Hard' || difficulty === 'Sixteenth' ? 4 : difficulty === 'Normal' ? 2 : 1
+export const subdivisionLabels = (division: number) => division === 4 ? ['', 'e', '&', 'a'] : division === 3 ? ['', 'trip', 'let'] : division === 2 ? ['', '&'] : ['']
+export const beatAccent = (beat: number) => beat === 1 ? 1 : beat === 3 ? 0.55 : beat > 0 ? 0.22 : 0
 export type Stick = 'L' | 'R'
 export const paradiddle: Stick[] = ['R', 'L', 'R', 'R', 'L', 'R', 'L', 'L']
 export const controlStick = (code: string, location: number): Stick | null =>

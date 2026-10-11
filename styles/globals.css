@@ -158,6 +158,7 @@ a { color: var(--mint); }
 .credit-notice { color: #93a9c3; font-size: 11px; line-height: 1.8; }
 .beat-counter { position: fixed; right: 24px; top: 104px; width: 200px; z-index: 3; padding: 12px 14px; border: 1px solid #3b5267; border-radius: 10px; background: #101e30e8; }
 .beat-counter.on-beat { border-color: #5df3d199; }
+.beat-counter.strong { box-shadow: 0 0 34px #5df3d144; }
 .beat-counter-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: #92a9bf; font: 9px monospace; }
 .metronome-toggle { border: 0; background: transparent; color: var(--mint); padding: 2px; font: 9px monospace; }
 .beat-counter-number { font: bold 30px monospace; color: var(--mint); padding: 6px 0; }
@@ -213,6 +214,8 @@ a { color: var(--mint); }
 .quick-controls { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; border-top: 1px solid #2e4d51; padding-top: 12px; color: #9bb2c2; font-size: 10px; line-height: 1.5; }
 .quick-controls b { display: block; color: #d7e9ef; font-size: 11px; }
 .quick-controls small { grid-column: 1 / -1; color: #7895a4; font-size: 9px; }
+.empty-library { color: #8eabc0; font-size: 12px; line-height: 1.6; margin: 8px 0 14px; }
+.level-note { color: #9ec9c2; font-size: 12px; line-height: 1.5; margin: 10px 2px 0; }
 .landing-support .how-to { margin: 0; padding-top: 18px; }
 .how-to summary { cursor: pointer; color: #bbcfdf; font-size: 12px; }
 .how-to summary:hover { color: var(--mint); }
