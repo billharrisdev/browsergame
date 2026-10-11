@@ -52,9 +52,14 @@ export class AudioProcessor {
     if (this.disposed) throw new Error('Audio player has been closed.')
     const validChart = chart?.version === 3 && chart.beats?.length > 0 && Number.isFinite(chart.bpm) && chart.bpm > 0
       && Math.abs((chart.duration || 0) - buffer.duration) < 0.2
-      && chart.beats.every((time, index) => Number.isFinite(time) && time >= 0 && time < buffer.duration && (index === 0 || time > chart.beats[index - 1]))
-      && chart.notes?.every((time, index) => Number.isFinite(time) && time >= 0 && time < buffer.duration && (index === 0 || time > chart.notes![index - 1]))
-    let beatMap = chart
+      && chart.beats.every((time, index) => Number.isFinite(time) && time >= 0 && time < chart.duration! && (index === 0 || time > chart.beats[index - 1]))
+      && chart.notes?.every((time, index) => Number.isFinite(time) && time >= 0 && time < chart.duration! && (index === 0 || time > chart.notes![index - 1]))
+    // MP3 decoders can disagree slightly on end padding. A compatible chart
+    // keeps its phase; only timestamps beyond the decoded end are trimmed.
+    let beatMap: BeatMap | undefined = validChart ? { ...chart!, duration: buffer.duration,
+      beats: chart!.beats.filter(time => time < buffer.duration),
+      notes: chart!.notes!.filter(time => time < buffer.duration)
+    } : undefined
     if (!validChart) {
       // Stored charts avoid scanning the recording again. Uploads average stereo
       // channels for analysis without changing the playback recording.

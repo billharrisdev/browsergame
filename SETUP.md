@@ -7,7 +7,9 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. Select a song and click **Play the beat**.
+Open http://localhost:3000 and click **Start playing**. The default song,
+Feel Good Rock, and level 1 are ready immediately; the play card is above the
+song library. Changing tracks preserves your chosen level.
 Listen to the phase-aligned count-in, then hit targets when their rings close.
 Aim + left/right mouse click for L/R sticks, or use Left/Right Ctrl to strike the
 next target automatically. Release between strokes. Touch users can use L/R pads.

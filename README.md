@@ -11,8 +11,10 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. Pick a song, optionally preview it, select a challenge,
-and click **Play the beat**. A four-beat audible count-in precedes the song.
+Open http://localhost:3000 and click **Start playing**. **Feel Good Rock** and
+**Level 1 · Pulse** are preselected. The play card, difficulty, and essential
+controls appear before the song library. A four-beat audible count-in precedes
+the song. Browsing songs or collections preserves your selected level.
 
 ## Levels and drum sticks
 
@@ -76,18 +78,23 @@ tempo changes when regenerating charts. Charts use schema version 3.
 
 | Error from target time | Judgment |
 | --- | --- |
-| Within ±45 ms | Perfect |
-| Within ±100 ms | Close, with early/late feedback |
-| 100–180 ms early | Early |
-| 100–180 ms late | Late |
-| More than 180 ms early | Too early; target remains hittable |
-| More than 180 ms late / no tap | Miss |
+| Within ±54 ms | Perfect |
+| Within ±120 ms | Close, with early/late feedback |
+| 120–216 ms early | Early |
+| 120–216 ms late | Late |
+| More than 216 ms early | Too early; target remains hittable |
+| More than 216 ms late / no tap | Miss |
 | Click away from a target | No target |
 | Correct timing, incorrect required hand | Wrong stick, with original timing feedback |
 
-These are maximum windows. Dense subdivisions cap the hit window at half the
-neighboring stroke spacing; Perfect/Close windows shrink proportionally, as
-shown in the HUD. This prevents sixteenth notes from stealing adjacent strokes.
+The maximum grading/acceptance windows are 20% wider than the original settings.
+Dense subdivisions retain the half-neighbor-spacing safety cap; their original
+Perfect/Close bands grow by 20% up to that cap. At 120 BPM, sixteenths allow
+±37.5 ms Perfect and ±62.5 ms Close/accepted hits. Signed early/late feedback
+still appears on those Close hits. The HUD labels and meter bands use the same
+thresholds as judging, expiration, and delayed-input recovery.
+Small MP3-decoder differences in end padding trim only trailing chart timestamps;
+compatible stored charts preserve their beat phase instead of being regenerated.
 
 Every attempt shows localized feedback and a signed timing indicator. The timing
 meter plots recent hits: early on the left, late on the right. Perfect and Close

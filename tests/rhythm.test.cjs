@@ -8,7 +8,7 @@ require.extensions['.ts'] = (module, filename) => {
   const source = fs.readFileSync(filename, 'utf8')
   module._compile(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, filename)
 }
-const { analyzeBeats, buildSongChart, makeBeatGrid, makeTempoGrid, beatPosition, controlStick, nearestBeatDistance, paradiddle, timingGrade, describeTiming } = require('../lib/game-engine/rhythm.ts')
+const { analyzeBeats, buildSongChart, makeBeatGrid, makeTempoGrid, beatPosition, controlStick, nearestBeatDistance, paradiddle, timingGrade, timingWindows, describeTiming } = require('../lib/game-engine/rhythm.ts')
 const { createTargets, GameWorld } = require('../lib/game-engine/gameWorld.ts')
 const { RunScore } = require('../lib/game-engine/scoring.ts')
 const { AudioProcessor } = require('../lib/game-engine/audioProcessor.ts')
@@ -39,14 +39,16 @@ test('uploaded steady pulses infer tempo and silence has zero confidence', () =>
 })
 
 test('timing windows are symmetric and beat distance wraps across phase', () => {
-  assert.equal(timingGrade(-0.045), 'Perfect')
-  assert.equal(timingGrade(0.045), 'Perfect')
-  assert.equal(timingGrade(-0.1), 'Close')
-  assert.equal(timingGrade(0.1), 'Close')
-  assert.equal(timingGrade(-0.18), 'Early')
-  assert.equal(timingGrade(0.18), 'Late')
-  assert.equal(timingGrade(-0.181), 'Too early')
-  assert.equal(timingGrade(0.181), 'Miss')
+  assert.equal(timingGrade(-0.054), 'Perfect')
+  assert.equal(timingGrade(0.054), 'Perfect')
+  assert.equal(timingGrade(0.054001), 'Close')
+  assert.equal(timingGrade(-0.12), 'Close')
+  assert.equal(timingGrade(0.12), 'Close')
+  assert.equal(timingGrade(0.120001), 'Late')
+  assert.equal(timingGrade(-0.216), 'Early')
+  assert.equal(timingGrade(0.216), 'Late')
+  assert.equal(timingGrade(-0.216001), 'Too early')
+  assert.equal(timingGrade(0.216001), 'Miss')
   assert.equal(describeTiming('Close', -75), 'Close · 75 ms early')
   assert.equal(describeTiming('Perfect', 0), 'Perfect · on time')
   const map = { bpm: 120, offset: 0.1, beats: [], confidence: 1 }
@@ -55,6 +57,33 @@ test('timing windows are symmetric and beat distance wraps across phase', () => 
   const expressive = { ...map, beats: [0.1, 0.62, 1.09, 1.61] }
   assert.equal(nearestBeatDistance(1.09, expressive), 0)
   assert.ok(Math.abs(nearestBeatDistance(1.11, expressive) - 0.02) < 1e-8)
+})
+
+test('20% wider grading bands stay inside dense-note safety caps', () => {
+  const normal = timingWindows()
+  assert.ok(Math.abs(normal.perfect - 0.054) < 1e-10)
+  assert.ok(Math.abs(normal.close - 0.12) < 1e-10)
+  assert.ok(Math.abs(normal.hit - 0.216) < 1e-10)
+  const dense = timingWindows(0.0625)
+  assert.ok(Math.abs(dense.perfect - 0.0375) < 1e-10)
+  assert.equal(dense.close, 0.0625)
+  assert.equal(dense.hit, 0.0625)
+  assert.equal(timingGrade(0.034, dense.hit), 'Perfect')
+  assert.equal(timingGrade(0.057, dense.hit), 'Close')
+  assert.equal(timingGrade(0.062501, dense.hit), 'Miss')
+  assert.equal(timingGrade(-0.062501, dense.hit), 'Too early')
+})
+
+test('a 200ms late hit is accepted before the widened expiry deadline', () => {
+  const map = { bpm: 120, offset: 0, beats: [2, 2.5, 3], confidence: 1 }
+  const world = new GameWorld(map, 5, 'Easy')
+  const target = world.targets[0]
+  world.update(2.2)
+  assert.equal(world.stats.counts.Miss, 0)
+  assert.equal(world.hit(target.x, target.y, 2.2, 800, 500, 42).grade, 'Late')
+  world.update(2.23)
+  assert.equal(world.stats.counts.Miss, 0)
+  assert.equal(world.stats.counts.Late, 1)
 })
 
 test('targets are deterministic, difficulty changes density, and timing stays on the chart', () => {
@@ -100,7 +129,7 @@ test('input captured inside the window is valid even when dispatched after a tim
   const map = { bpm: 120, offset: 0, beats: [2, 2.5, 3], confidence: 1 }
   const world = new GameWorld(map, 5, 'Easy')
   const target = world.targets[0]
-  world.update(2.21)
+  world.update(2.23)
   assert.equal(world.stats.counts.Miss, 1)
   const result = world.hit(target.x, target.y, 2.08, 800, 500, 42)
   assert.equal(result.grade, 'Close')
@@ -112,7 +141,7 @@ test('input captured inside the window is valid even when dispatched after a tim
 test('automatic misses resolve once and finishing accounts for all remaining targets', () => {
   const map = { bpm: 120, offset: 0, beats: [2, 2.5, 3], confidence: 1 }
   const world = new GameWorld(map, 5, 'Easy')
-  world.update(2.2)
+  world.update(2.22)
   world.update(2.25)
   assert.equal(world.stats.counts.Miss, 1)
   world.finish(5)
@@ -225,6 +254,20 @@ test('valid stored charts preserve edited timestamps; incompatible charts are re
   await audio.loadAudio(new ArrayBuffer(8), 120, { ...edited, duration: 50 })
   assert.ok(audio.beatMap.beats.length > 3)
   assert.notDeepEqual(audio.beatMap.notes, edited.notes)
+  audio.dispose()
+})
+
+test('decoder end-padding differences trim chart tails without regenerating beat phase', async () => {
+  global.AudioContext = FakeAudioContext
+  const audio = new AudioProcessor()
+  const stored = { version: 3, bpm: 120, offset: 0.123, confidence: 1, duration: 30.08,
+    beats: [0.123, 0.623, 1.123, 29.9, 30.04], notes: [1.123, 29.9, 30.04] }
+  await audio.loadAudio(new ArrayBuffer(8), 120, stored)
+  assert.equal(audio.beatMap.offset, 0.123)
+  assert.equal(audio.beatMap.duration, 30)
+  assert.deepEqual(audio.beatMap.beats, [0.123, 0.623, 1.123, 29.9])
+  assert.deepEqual(audio.beatMap.notes, [1.123, 29.9])
+  assert.deepEqual(stored.notes, [1.123, 29.9, 30.04])
   audio.dispose()
 })
 

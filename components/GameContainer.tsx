@@ -142,7 +142,6 @@ export default function GameContainer() {
     stopPreview()
     setError('')
     setUploaded(file)
-    setDifficulty('Normal')
   }
 
   const openDialog = (name: 'credits' | 'settings') => {
@@ -157,7 +156,6 @@ export default function GameContainer() {
     setGenre('All')
     const first = tracks.find(track => track.collection === next)!
     setSelectedId(first.id)
-    setDifficulty(first.difficulty)
     setUploaded(null)
     setError('')
   }
@@ -168,7 +166,6 @@ export default function GameContainer() {
     if (next !== 'All' && (selected.genre !== next || uploaded)) {
       const first = tracks.find(track => track.genre === next)!
       setSelectedId(first.id)
-      setDifficulty(first.difficulty)
       setUploaded(null)
       setError('')
     }
@@ -182,26 +179,35 @@ export default function GameContainer() {
       <section className="library-layout">
         <div className="hero-panel">
           <span className="eyebrow">POINT. CLICK. FIND THE POCKET.</span>
-          <h1>Feel it.<br /><em>Hit the beat.</em></h1>
-          <p className="hero-copy">A target. A shrinking ring. One perfect moment. Click or tap in time with the music and find your rhythm.</p>
-          <div className="orbit-art target-art" aria-hidden="true"><div className="demo-approach" /><div className="orbit-core">1</div><span className="orbit-label">WAIT FOR THE RING. THEN CLICK.</span></div>
-          <div className="how-to"><span className="eyebrow">YOUR FIRST FOUR BEATS</span><p><b>01</b> Listen to the count-in and follow the corner beat counter.</p><p><b>02</b> Aim + left/right click, or strike the next target with Left/Right Ctrl.</p><p><b>03</b> Level 2: R L R R · L R L L in eighths. Level 3: sixteenths.</p><small>Perfect and Close hits with the correct stick build combos. Turn on the beat click to check alignment; adjust timing offset in Settings.</small></div>
+          <h1><em>Hit the beat.</em></h1>
+          <p className="hero-copy">Aim and click—or use two Ctrl keys as drum sticks. Hit the target when its shrinking ring closes.</p>
         </div>
+        <section className="quick-play" aria-label="Quick start">
+          <div className="launch-panel">
+            <div className="selected-song"><span className="eyebrow">READY TO PLAY</span><strong>{title}</strong><small>{uploaded ? 'Your music' : `${selected.artist} · ${formatTime(selected.duration)}`} · Best: {(bests[scoreKey] || 0).toLocaleString()}</small></div>
+            <label className="difficulty-picker">Level<select aria-label="Difficulty level" value={difficulty} disabled={busy} onChange={event => setDifficulty(event.target.value)}><option value="Easy">1 · Pulse</option><option value="Normal">2 · Eighths</option><option value="Hard">3 · Sixteenths</option></select></label>
+            <button className="primary-button launch-button" disabled={!ready || busy} onClick={start}>{busy ? 'Preparing your song…' : 'Start playing →'}</button>
+            <div className="quick-controls" aria-label="Essential controls"><span><b>Mouse</b> Aim + left / right click</span><span><b>Ctrl keys</b> Left / right stick · auto-aim</span><small>Listen to four count-in beats, then strike as the ring closes.</small></div>
+          </div>
+          {error && <p className="error-message" role="alert">{error}</p>}
+        </section>
         <div className="soundtrack-panel">
-          <div className="section-heading"><div><span className="eyebrow">PICK YOUR SOUND</span><h2>The soundtrack</h2></div><span className="track-count">24 FREE TRACKS</span></div>
+          <div className="section-heading"><div><span className="eyebrow">WANT A DIFFERENT SOUND?</span><h2>The soundtrack</h2></div><span className="track-count">24 FREE TRACKS</span></div>
           <div className="collection-tabs" aria-label="Soundtrack collections"><button disabled={busy} className={collection === 'genres' ? 'active' : ''} aria-pressed={collection === 'genres'} onClick={() => chooseCollection('genres')}>Genre Collection <small>12 new songs</small></button><button disabled={busy} className={collection === 'original' ? 'active' : ''} aria-pressed={collection === 'original'} onClick={() => chooseCollection('original')}>Original Mix <small>12 original songs</small></button></div>
           {collection === 'genres' && <div className="genre-filters" aria-label="Genre filters">{['All', 'Rock', 'Jazz', 'Punk', 'Metal'].map(value => <button key={value} disabled={busy} className={genre === value ? 'active' : ''} aria-pressed={genre === value} onClick={() => chooseGenre(value)}>{value}</button>)}</div>}
           <div className="track-list" aria-label="Song library">
             {visibleTracks.map((track, index) => <div key={track.id} className={`track-row ${!uploaded && selected.id === track.id ? 'active' : ''}`}>
-              <button className="track-select" disabled={busy} aria-pressed={!uploaded && selected.id === track.id} onClick={() => { stopPreview(); setUploaded(null); setSelectedId(track.id); setDifficulty(track.difficulty); setError('') }}><span className={`track-art art-${index % 4}`}>{String(index + 1).padStart(2, '0')}</span><span className="track-details"><strong>{track.title}</strong><small>{track.genre || track.style} · {track.artist}</small></span><span className="track-meta"><b>{track.bpm ? `${Math.round(track.bpm)} BPM` : 'AUTO TEMPO'}</b><small>{formatTime(track.duration)} · {track.difficulty}</small></span></button>
+              <button className="track-select" disabled={busy} aria-pressed={!uploaded && selected.id === track.id} onClick={() => { stopPreview(); setUploaded(null); setSelectedId(track.id); setError('') }}><span className={`track-art art-${index % 4}`}>{String(index + 1).padStart(2, '0')}</span><span className="track-details"><strong>{track.title}</strong><small>{track.genre || track.style} · {track.artist}</small></span><span className="track-meta"><b>{track.bpm ? `${Math.round(track.bpm)} BPM` : 'AUTO TEMPO'}</b><small>{formatTime(track.duration)}</small></span></button>
               <button className="preview-button" disabled={busy} onClick={() => preview(track.id)} aria-label={`${previewId === track.id ? 'Stop preview of' : 'Preview'} ${track.title}`}>{previewId === track.id ? '■' : '▶'}</button>
             </div>)}
           </div>
           <div className="upload-row"><button className="text-button" disabled={busy} onClick={() => fileRef.current?.click()}>＋ Bring your own music</button><span>{uploaded ? uploaded.name : 'Audio stays on your device'}</span><input ref={fileRef} type="file" accept="audio/*" hidden onChange={event => { upload(event.target.files?.[0]); event.target.value = '' }} /></div>
-          <div className="launch-panel"><div className="selected-song"><span className="eyebrow">READY TO FIND THE POCKET</span><strong>{title}</strong><small>{uploaded ? 'Generated pulse grid' : 'Stored pulse grid'} · Best: {(bests[scoreKey] || 0).toLocaleString()}</small></div><label className="difficulty-picker">Level<select value={difficulty} disabled={busy} onChange={event => setDifficulty(event.target.value)}><option value="Easy">1 · Pulse</option><option value="Normal">2 · Eighths</option><option value="Hard">3 · Sixteenths</option></select></label><button className="primary-button launch-button" disabled={!ready || busy} onClick={start}>{busy ? 'Preparing your song…' : 'Play the beat →'}</button></div>
-          {error && <p className="error-message" role="alert">{error}</p>}
           <p className="license-note">Free with attribution · CC BY 4.0 · Music credits included</p>
         </div>
+        <aside className="landing-support">
+          <details className="how-to"><summary>How to play &amp; practice levels</summary><p><b>01</b> Listen to the count-in and follow the corner beat counter.</p><p><b>02</b> Aim + left/right click, or strike the next target with Left/Right Ctrl.</p><p><b>03</b> Level 2: R L R R · L R L L in eighths. Level 3: sixteenths.</p><small>Perfect and Close hits with the correct stick build combos. Turn on the beat click to check alignment; adjust timing offset in Settings. Touch players can use the L/R pads.</small></details>
+          <div className="orbit-art target-art" aria-hidden="true"><div className="demo-approach" /><div className="orbit-core">1</div><span className="orbit-label">WAIT FOR THE RING. THEN CLICK.</span></div>
+        </aside>
       </section>
     </div> : <GameUI snapshot={snapshot} title={title} generated={!!uploaded} best={bests[scoreKey] || 0} metronome={metronome} onMetronome={() => setMetronome(previous => !previous)} onStick={(hand, stamp) => gameRef.current?.strikeStick(hand, stamp)} onHit={(x, y, stamp, hand) => gameRef.current?.clickAt(x, y, stamp, hand)} onPause={() => gameRef.current?.pauseGame()} onResume={() => { void gameRef.current?.resumeGame() }} onRestart={() => { void gameRef.current?.restartGame().catch(() => setError('Audio could not restart. Try loading the song again.')) }} onMenu={() => gameRef.current?.returnToMenu()} onSettings={() => openDialog('settings')} />}
     <dialog ref={dialogRef} className="settings-dialog" aria-label={dialog === 'credits' ? 'Music credits' : 'Game settings'} onCancel={() => setDialog(null)} onClick={event => { if (event.target === event.currentTarget) setDialog(null) }}>

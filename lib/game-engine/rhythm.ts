@@ -144,14 +144,28 @@ export function nearestBeatDistance(time: number, map: BeatMap): number {
 }
 
 export type Judgment = 'Perfect' | 'Close' | 'Early' | 'Late' | 'Too early' | 'Miss' | 'No target' | 'Wrong stick'
-export const hitWindow = 0.18
+const originalHitWindow = 0.18
+const timingLeniency = 1.2
+export const hitWindow = originalHitWindow * timingLeniency
+
+// `window` has already been capped by adjacent-note spacing. Scale the old
+// grading bands by 20%, then keep them inside that safe acceptance window.
+export function timingWindows(window = hitWindow) {
+  const originalWindow = Math.min(originalHitWindow, window)
+  return {
+    hit: window,
+    perfect: Math.min(window, Math.min(0.045, originalWindow * 0.5) * timingLeniency),
+    close: Math.min(window, Math.min(0.1, originalWindow * 0.85) * timingLeniency)
+  }
+}
 
 export function timingGrade(errorSeconds: number, window = hitWindow): Judgment {
-  const error = Math.round(Math.abs(errorSeconds) * 1000000) / 1000000
+  const error = Math.abs(errorSeconds)
+  const bands = timingWindows(window)
   if (errorSeconds < -window && error > window + 1e-7) return 'Too early'
   if (error > window + 1e-7) return 'Miss'
-  if (error <= Math.min(0.045, window * 0.5)) return 'Perfect'
-  if (error <= Math.min(0.1, window * 0.85)) return 'Close'
+  if (error <= bands.perfect + 1e-7) return 'Perfect'
+  if (error <= bands.close + 1e-7) return 'Close'
   return errorSeconds < 0 ? 'Early' : 'Late'
 }
 

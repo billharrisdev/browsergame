@@ -1,6 +1,6 @@
 import { AudioProcessor } from './audioProcessor'
 import { approachTime, BeatTarget, GameWorld, HitResult } from './gameWorld'
-import { beatInterval, beatPosition, controlStick, Judgment, nearestBeatDistance, paradiddle, Stick, subdivisionsFor } from './rhythm'
+import { beatInterval, beatPosition, controlStick, hitWindow, Judgment, nearestBeatDistance, paradiddle, Stick, subdivisionsFor, timingWindows } from './rhythm'
 import { JudgmentCounts } from './scoring'
 
 export type GameState = 'menu' | 'countdown' | 'playing' | 'paused' | 'complete'
@@ -37,7 +37,11 @@ export interface GameSnapshot {
   stickAttempts: number
   perfectWindowMs: number
   closeWindowMs: number
+  hitWindowMs: number
 }
+
+const defaultTiming = timingWindows()
+const milliseconds = (seconds: number) => Math.round(seconds * 10000) / 10
 
 export const initialSnapshot: GameSnapshot = {
   state: 'menu', score: 0, combo: 0, multiplier: 1, progress: 0, duration: 0, bpm: 120, confidence: 0,
@@ -45,7 +49,8 @@ export const initialSnapshot: GameSnapshot = {
   bestCombo: 0, totalTargets: 0, stray: 0, meanError: 0, errors: [], targets: [],
   beat: { total: 0, beat: 0, bar: 0, subdivision: 0, phase: 0 }, meter: 4, meterVerified: false, division: 1,
   pattern: 'Pulse', patternSteps: [], patternStep: 0, expectedStick: null, pressed: { L: false, R: false },
-  timingAccuracy: 100, stickAccuracy: 100, stickAttempts: 0, perfectWindowMs: 45, closeWindowMs: 100
+  timingAccuracy: 100, stickAccuracy: 100, stickAttempts: 0,
+  perfectWindowMs: milliseconds(defaultTiming.perfect), closeWindowMs: milliseconds(defaultTiming.close), hitWindowMs: milliseconds(defaultTiming.hit)
 }
 
 export const judgmentColors: Record<Judgment, string> = {
@@ -231,7 +236,7 @@ export class FrequencyFrontierGame {
     const period = 60 / map.bpm
     const phase = ((map.offset % period) + period) % period - this.timingOffset / 1000
     const pattern = next?.pattern || 'Pulse'
-    const window = next?.window || 0.18
+    const bands = timingWindows(next?.window ?? hitWindow)
     const beat = beatPosition(this.time, map, division)
     this.onUpdate?.({
       state: this.gameState, score: stats?.score || 0, combo: stats?.combo || 0, multiplier: stats?.multiplier || 1,
@@ -250,7 +255,7 @@ export class FrequencyFrontierGame {
       pressed: { L: this.heldSticks.has('L') || performance.now() < this.flashUntil.L, R: this.heldSticks.has('R') || performance.now() < this.flashUntil.R },
       timingAccuracy: stats?.timingAccuracy ?? 100, stickAccuracy: stats?.stickAccuracy ?? 100,
       stickAttempts: (stats?.stickCorrect || 0) + (stats?.stickWrong || 0),
-      perfectWindowMs: Math.round(Math.min(0.045, window * 0.5) * 1000), closeWindowMs: Math.round(Math.min(0.1, window * 0.85) * 1000)
+      perfectWindowMs: milliseconds(bands.perfect), closeWindowMs: milliseconds(bands.close), hitWindowMs: milliseconds(bands.hit)
     })
   }
 
@@ -306,7 +311,7 @@ export class FrequencyFrontierGame {
     if (target.hand) { ctx.font = '10px monospace'; ctx.fillText(String(target.id), 0, radius * 0.48) }
     if (next) {
       ctx.font = '10px monospace'; ctx.fillStyle = color
-      ctx.fillText(remaining < 0 ? 'LATE' : remaining <= Math.min(0.045, target.window * 0.5) ? 'HIT!' : 'NEXT', 0, -radius - 14)
+      ctx.fillText(remaining < 0 ? 'LATE' : remaining <= timingWindows(target.window).perfect ? 'HIT!' : 'NEXT', 0, -radius - 14)
     }
     ctx.restore()
   }

@@ -1,5 +1,5 @@
 import { GameSnapshot, judgmentColors } from '../lib/game-engine'
-import { Stick, subdivisionLabels } from '../lib/game-engine/rhythm'
+import { hitWindow, Stick, subdivisionLabels } from '../lib/game-engine/rhythm'
 import { describeHit } from '../lib/game-engine/gameWorld'
 
 export const formatTime = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
@@ -26,6 +26,9 @@ export default function GameUI({ snapshot: s, title, onPause, onResume, onRestar
   const feedback = s.feedback
   const error = feedback?.errorMs
   const labels = subdivisionLabels(s.division)
+  const meterLimit = hitWindow * 1000
+  const meterPosition = (value: number) => 50 + Math.max(-meterLimit, Math.min(meterLimit, value)) / meterLimit * 50
+  const zone = (windowMs: number) => ({ left: `${meterPosition(-windowMs)}%`, right: `${100 - meterPosition(windowMs)}%` })
   return <>
     {s.state === 'playing' && <div className="target-input-layer">{s.targets.map(target => <button key={target.id} className="target-input" aria-label={`Target ${target.id}${target.hand ? ` ${target.hand} stick` : ''}`} style={{ left: target.x - target.radius, top: target.y - target.radius, width: target.radius * 2, height: target.radius * 2 }} onContextMenu={event => event.preventDefault()} onPointerDown={event => {
       if (!event.isPrimary || ![0, 2].includes(event.button)) return
@@ -60,11 +63,11 @@ export default function GameUI({ snapshot: s, title, onPause, onResume, onRestar
       <div className="timing-panel">
         <div className="timing-labels"><span>EARLY</span><strong>PERFECT</strong><span>LATE</span></div>
         <div className="timing-meter" aria-label="Timing meter: early on the left, late on the right">
-          <div className="close-zone" /><div className="perfect-zone" /><div className="timing-center" />
-          {s.errors.map((value, index) => <i key={`${index}:${value}`} className="timing-history" style={{ left: `${50 + Math.max(-180, Math.min(180, value)) / 3.6}%`, opacity: 0.15 + index / Math.max(1, s.errors.length) * 0.5 }} />)}
-          {error !== null && error !== undefined && <i className="timing-marker" style={{ left: `${50 + Math.max(-180, Math.min(180, error)) / 3.6}%`, background: judgmentColors[feedback!.grade] }} />}
+          <div className="hit-zone" style={zone(s.hitWindowMs)} /><div className="close-zone" style={zone(s.closeWindowMs)} /><div className="perfect-zone" style={zone(s.perfectWindowMs)} /><div className="timing-center" />
+          {s.errors.map((value, index) => <i key={`${index}:${value}`} className="timing-history" style={{ left: `${meterPosition(value)}%`, opacity: 0.15 + index / Math.max(1, s.errors.length) * 0.5 }} />)}
+          {error !== null && error !== undefined && <i className="timing-marker" style={{ left: `${meterPosition(error)}%`, background: judgmentColors[feedback!.grade] }} />}
         </div>
-        <div className="timing-caption">±{s.perfectWindowMs} ms perfect · ±{s.closeWindowMs} ms close · {s.totalTargets} targets</div>
+        <div className="timing-caption">±{s.perfectWindowMs} ms perfect · ±{s.closeWindowMs} ms close · ±{s.hitWindowMs} ms hit<small>{s.totalTargets} targets</small></div>
       </div>
       <div className="play-help">Aim + left / right mouse click<br />Left / Right Ctrl: automatic stick strikes</div>
     </footer>
