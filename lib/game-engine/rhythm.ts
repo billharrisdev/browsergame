@@ -3,6 +3,9 @@ export interface BeatMap {
   offset: number
   confidence: number
   beats: number[]
+  notes?: number[]
+  version?: number
+  duration?: number
 }
 
 export function makeBeatGrid(duration: number, bpm: number, offset: number): number[] {
@@ -97,7 +100,77 @@ export function nearestBeatDistance(time: number, map: BeatMap): number {
   return Math.min(phase, period - phase)
 }
 
-export function timingGrade(errorSeconds: number): 'Perfect' | 'Good' | 'Collected' {
-  const error = Math.abs(errorSeconds)
-  return error <= 0.09 ? 'Perfect' : error <= 0.2 ? 'Good' : 'Collected'
+export type Judgment = 'Perfect' | 'Close' | 'Early' | 'Late' | 'Too early' | 'Miss' | 'No target'
+export const hitWindow = 0.18
+
+export function timingGrade(errorSeconds: number): Judgment {
+  const error = Math.round(Math.abs(errorSeconds) * 1000000) / 1000000
+  if (errorSeconds < -hitWindow && error > hitWindow) return 'Too early'
+  if (error > hitWindow) return 'Miss'
+  if (error <= 0.045) return 'Perfect'
+  if (error <= 0.1) return 'Close'
+  return errorSeconds < 0 ? 'Early' : 'Late'
+}
+
+export function describeTiming(grade: Judgment, errorMs: number | null): string {
+  if (errorMs === null || grade === 'Miss' || grade === 'No target') return grade
+  const amount = Math.round(Math.abs(errorMs))
+  return `${grade} · ${amount === 0 ? 'on time' : `${amount} ms ${errorMs < 0 ? 'early' : 'late'}`}`
+}
+
+// Offline charts follow locally detected attacks, with a tempo anchor that can
+// adapt gradually. Quiet passages are excluded from target generation.
+export function buildSongChart(samples: Float32Array, sampleRate: number, suppliedBpm?: number): BeatMap {
+  const map = analyzeBeats(samples, sampleRate, suppliedBpm)
+  const hop = Math.max(1, Math.round(sampleRate / 100))
+  const rate = sampleRate / hop
+  const energy: number[] = []
+  const attacks: number[] = []
+  let low = 0
+  let previousBass = 0
+  let previousHigh = 0
+  const coefficient = 1 - Math.exp(-2 * Math.PI * 180 / sampleRate)
+  for (let start = 0; start < samples.length; start += hop) {
+    let bass = 0, high = 0, total = 0
+    const end = Math.min(samples.length, start + hop)
+    for (let i = start; i < end; i++) {
+      low += coefficient * (samples[i] - low)
+      bass += low * low
+      high += (samples[i] - low) ** 2
+      total += samples[i] ** 2
+    }
+    const length = end - start
+    const bassLevel = Math.sqrt(bass / length)
+    const highLevel = Math.sqrt(high / length)
+    energy.push(Math.sqrt(total / length))
+    attacks.push(Math.max(0, bassLevel - previousBass) * 1.5 + Math.max(0, highLevel - previousHigh))
+    previousBass = bassLevel
+    previousHigh = highLevel
+  }
+  const maxEnergy = energy.reduce((max, value) => Math.max(max, value), 0)
+  const sorted = attacks.filter(value => value > 0).sort((a, b) => a - b)
+  const attackThreshold = (sorted[Math.floor(sorted.length * 0.7)] || 0) * 0.15
+  const period = 60 / map.bpm
+  const beats: number[] = []
+  const notes: number[] = []
+  let correction = 0
+  for (let expected = map.offset; expected < samples.length / sampleRate; expected += period) {
+    const predicted = expected + correction
+    const radius = Math.min(0.12, period * 0.24)
+    const start = Math.max(0, Math.floor((predicted - radius) * rate))
+    const end = Math.min(attacks.length - 1, Math.ceil((predicted + radius) * rate))
+    let bestScore = 0, strongest = 0, aligned = predicted
+    for (let i = start; i <= end; i++) {
+      const weighted = attacks[i] * (1 - Math.abs(i / rate - predicted) / (radius * 2))
+      if (weighted > bestScore) { bestScore = weighted; strongest = attacks[i]; aligned = i / rate }
+    }
+    correction += (aligned - predicted) * 0.35
+    if (aligned < 0 || aligned >= samples.length / sampleRate) continue
+    const time = Math.round(aligned * 1000) / 1000
+    if (beats.length && time - beats[beats.length - 1] < period * 0.5) continue
+    beats.push(time)
+    const localEnergy = energy[Math.min(energy.length - 1, Math.round(aligned * rate))] || 0
+    if (strongest > attackThreshold && localEnergy > maxEnergy * 0.045) notes.push(time)
+  }
+  return { ...map, beats, notes, version: 2, duration: samples.length / sampleRate }
 }

@@ -1,64 +1,80 @@
-import { BeatMap } from './rhythm'
-import { FrequencyMode } from './player'
+import { BeatMap, hitWindow, Judgment, timingGrade } from './rhythm'
+import { RunScore } from './scoring'
 
-export interface Encounter {
-  time: number
-  y: number
-  mode: FrequencyMode
-  kind: 'note' | 'hazard'
-  resolved: boolean
-}
+export interface BeatTarget { id: number; time: number; x: number; y: number; resolved: boolean; timedOut?: boolean; comboBeforeMiss?: number }
+export interface HitResult { grade: Judgment; errorMs: number | null; x: number; y: number; time: number; targetId?: number }
+export const approachTime = (difficulty: string) => difficulty === 'Easy' ? 1.2 : difficulty === 'Hard' ? 0.7 : 0.95
 
-// A deterministic musical route: nearby lanes, a frequency change each phrase,
-// and hazards on a different lane from that phrase's notes.
-export function createEncounters(map: BeatMap, duration: number, difficulty: string): Encounter[] {
-  const encounters: Encounter[] = []
-  const modes: FrequencyMode[] = ['mid', 'high', 'bass']
-  const lanes = [0.32, 0.5, 0.7]
+export function createTargets(map: BeatMap, duration: number, difficulty: string): BeatTarget[] {
+  const times = map.notes || map.beats
+  const route = [[0.2, 0.27], [0.5, 0.22], [0.8, 0.34], [0.77, 0.72], [0.47, 0.77], [0.2, 0.67]]
   const stride = difficulty === 'Easy' ? 2 : 1
-  for (let beat = 0; beat < map.beats.length; beat++) {
-    const time = map.beats[beat]
-    if (time < 3 || time > duration - 1) continue
-    const phrase = Math.floor(beat / 8)
-    const lane = phrase % 3
-    if (beat % stride === 0) {
-      encounters.push({ time, y: lanes[lane] + Math.sin(beat * 0.6) * 0.035, mode: modes[phrase % 3], kind: 'note', resolved: false })
-    }
-    if (beat % (difficulty === 'Hard' ? 8 : 16) === 4 && time > 9) {
-      encounters.push({ time, y: lanes[(lane + 1) % 3], mode: 'bass', kind: 'hazard', resolved: false })
-    }
-  }
-  return encounters.sort((a, b) => a.time - b.time)
+  return times.filter((time, index) => index % stride === 0 && time >= 1.5 && time < duration - 0.4).map((time, index) => ({
+    id: index + 1, time, x: route[index % route.length][0], y: route[index % route.length][1], resolved: false
+  }))
 }
 
 export class GameWorld {
-  encounters: Encounter[]
+  readonly targets: BeatTarget[]
+  readonly stats = new RunScore()
+  feedback: HitResult[] = []
+  lastHit: HitResult | null = null
   cursor = 0
-  active: Encounter[] = []
-  particles: { x: number; y: number; vx: number; vy: number; life: number; color: string }[] = []
-
-  constructor(map: BeatMap, duration: number, difficulty: string) {
-    this.encounters = createEncounters(map, duration, difficulty)
+  active: BeatTarget[] = []
+  constructor(map: BeatMap, duration: number, readonly difficulty: string) {
+    this.targets = createTargets(map, duration, difficulty)
   }
 
-  update(time: number, delta: number) {
-    while (this.cursor < this.encounters.length && this.encounters[this.cursor].time < time + 3) {
-      this.active.push(this.encounters[this.cursor++])
+  update(time: number) {
+    while (this.cursor < this.targets.length && this.targets[this.cursor].time <= time + approachTime(this.difficulty)) {
+      this.active.push(this.targets[this.cursor++])
     }
-    this.active = this.active.filter(encounter => !encounter.resolved && encounter.time > time - 3)
-    this.particles = this.particles.filter(particle => {
-      particle.life -= delta
-      particle.x += particle.vx * delta
-      particle.y += particle.vy * delta
-      return particle.life > 0
-    })
+    for (const target of this.active) {
+      if (!target.resolved && time > target.time + hitWindow) {
+        target.timedOut = true
+        target.comboBeforeMiss = this.stats.combo
+        target.resolved = true
+        this.record({ grade: 'Miss', errorMs: null, x: target.x, y: target.y, time, targetId: target.id })
+      }
+    }
+    this.active = this.active.filter(target => !target.resolved)
+    this.feedback = this.feedback.filter(hit => time - hit.time < 0.85).slice(-5)
   }
 
-  explode(x: number, y: number, color: string, reducedMotion: boolean) {
-    if (reducedMotion) return
-    for (let i = 0; i < 12 && this.particles.length < 180; i++) {
-      const angle = i / 12 * Math.PI * 2
-      this.particles.push({ x, y, vx: Math.cos(angle) * 0.12, vy: Math.sin(angle) * 0.16, life: 0.6, color })
+  hit(x: number, y: number, time: number, width: number, height: number, radius: number): HitResult {
+    // Update spawning at the input timestamp, but do not expire targets until
+    // after judging: an event queued for a few ms must retain its original time.
+    while (this.cursor < this.targets.length && this.targets[this.cursor].time <= time + approachTime(this.difficulty)) {
+      this.active.push(this.targets[this.cursor++])
     }
+    const recoverable = this.targets.filter(target => target.timedOut && Math.abs(time - target.time) <= hitWindow)
+    const candidates = [...this.active, ...recoverable].filter(target => (!target.resolved || target.timedOut)
+      && Math.hypot((target.x - x) * width, (target.y - y) * height) <= radius)
+    const target = candidates.sort((a, b) => Math.abs(a.time - time) - Math.abs(b.time - time))[0]
+    if (!target) return this.record({ grade: 'No target', errorMs: null, x, y, time })
+    if (target.timedOut) {
+      this.stats.counts.Miss--
+      if (this.lastHit?.targetId === target.id && this.lastHit.grade === 'Miss') this.stats.combo = target.comboBeforeMiss || 0
+      this.feedback = this.feedback.filter(hit => hit.targetId !== target.id)
+      target.timedOut = false
+    }
+    const error = time - target.time
+    const grade = timingGrade(error)
+    if (grade !== 'Too early') target.resolved = true
+    return this.record({ grade, errorMs: grade === 'Miss' ? null : Math.round(error * 1000), x: target.x, y: target.y, time, targetId: target.id })
+  }
+
+  private record(hit: HitResult): HitResult {
+    this.stats.record(hit.grade, hit.errorMs)
+    this.feedback.push(hit)
+    this.lastHit = hit
+    return hit
+  }
+
+  finish(time: number) {
+    for (const target of this.targets) {
+      if (!target.resolved) { target.resolved = true; this.record({ grade: 'Miss', errorMs: null, x: target.x, y: target.y, time, targetId: target.id }) }
+    }
+    this.active = []
   }
 }

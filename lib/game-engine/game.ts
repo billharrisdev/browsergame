@@ -1,33 +1,42 @@
 import { AudioProcessor } from './audioProcessor'
-import { GameWorld } from './gameWorld'
-import { FrequencyMode, modeColors, Player } from './player'
-import { nearestBeatDistance, timingGrade } from './rhythm'
+import { approachTime, BeatTarget, GameWorld, HitResult } from './gameWorld'
+import { describeTiming, Judgment, nearestBeatDistance } from './rhythm'
+import { JudgmentCounts } from './scoring'
 
-export type GameState = 'menu' | 'countdown' | 'playing' | 'paused' | 'gameOver' | 'complete'
+export type GameState = 'menu' | 'countdown' | 'playing' | 'paused' | 'complete'
 export interface GameSnapshot {
   state: GameState
   score: number
-  health: number
-  mode: FrequencyMode
   combo: number
   multiplier: number
   progress: number
   duration: number
   bpm: number
   confidence: number
-  feedback: string
+  feedback: HitResult | null
   countdown: number
-  collected: number
-  perfect: number
-  missed: number
+  counts: JudgmentCounts
+  accuracy: number
   bestCombo: number
-  burst: boolean
-  levels: { bass: number; mid: number; high: number }
+  totalTargets: number
+  stray: number
+  meanError: number
+  errors: number[]
+  targets: { id: number; x: number; y: number; radius: number }[]
+}
+
+export const initialSnapshot: GameSnapshot = {
+  state: 'menu', score: 0, combo: 0, multiplier: 1, progress: 0, duration: 0, bpm: 120, confidence: 0,
+  feedback: null, countdown: 4, counts: { Perfect: 0, Close: 0, Early: 0, Late: 0, Miss: 0 }, accuracy: 100,
+  bestCombo: 0, totalTargets: 0, stray: 0, meanError: 0, errors: [], targets: []
+}
+
+export const judgmentColors: Record<Judgment, string> = {
+  Perfect: '#5df3d1', Close: '#8ebfff', Early: '#ffc581', Late: '#e8a3ff', 'Too early': '#ff9c81', Miss: '#ff708d', 'No target': '#ff708d'
 }
 
 export class FrequencyFrontierGame {
   readonly audioProcessor = new AudioProcessor()
-  player = new Player()
   gameWorld: GameWorld | null = null
   gameState: GameState = 'menu'
   onUpdate?: (snapshot: GameSnapshot) => void
@@ -38,15 +47,13 @@ export class FrequencyFrontierGame {
   private width = 800
   private height = 600
   private frame = 0
-  private lastFrame = 0
   private lastUpdate = 0
-  private countdownRemaining = 3
+  private countdownRemaining = 0
   private pausedState: 'playing' | 'countdown' = 'playing'
-  private feedback = ''
-  private feedbackUntil = 0
+  private pausedTime = 0
+  private feedback: HitResult | null = null
   private disposed = false
   private difficulty = 'Easy'
-  private keys = new Set<string>()
   private resizeObserver: ResizeObserver
 
   constructor(private canvas: HTMLCanvasElement) {
@@ -57,9 +64,7 @@ export class FrequencyFrontierGame {
     this.resizeObserver.observe(canvas)
     this.resize()
     canvas.addEventListener('pointerdown', this.pointer)
-    canvas.addEventListener('pointermove', this.pointer)
     window.addEventListener('keydown', this.keydown)
-    window.addEventListener('keyup', this.keyup)
     window.addEventListener('blur', this.blur)
     document.addEventListener('visibilitychange', this.visibility)
     this.frame = requestAnimationFrame(this.loop)
@@ -75,48 +80,70 @@ export class FrequencyFrontierGame {
     this.ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
   }
 
-  private pointer = (event: PointerEvent) => {
-    if (event.pointerType === 'touch' && event.type === 'pointermove' && !event.buttons) return
-    if (event.type === 'pointerdown') this.canvas.setPointerCapture(event.pointerId)
-    const rect = this.canvas.getBoundingClientRect()
-    this.player.targetX = (event.clientX - rect.left) / rect.width
-    this.player.targetY = (event.clientY - rect.top) / rect.height
+  private get playfield() {
+    const compact = this.height < 500
+    const top = compact ? 80 : this.width <= 680 ? 150 : 130
+    const bottom = compact ? 85 : this.width <= 680 ? 160 : 140
+    const width = Math.min(880, Math.max(100, this.width - 64))
+    const height = Math.max(100, this.height - top - bottom)
+    return { x: (this.width - width) / 2, y: top, width, height, radius: Math.max(25, Math.min(42, width * 0.09, height * 0.2)) }
   }
+
+  private get time() {
+    if (this.gameState === 'paused') return this.pausedTime
+    return this.audioProcessor.timeAt() + this.timingOffset / 1000
+  }
+
+  private pointer = (event: PointerEvent) => {
+    if (this.gameState !== 'playing' || !event.isPrimary || event.button !== 0) return
+    event.preventDefault()
+    this.clickAt(event.clientX, event.clientY, event.timeStamp)
+  }
+
+  clickAt(clientX: number, clientY: number, eventTime = performance.now()) {
+    if (this.gameState !== 'playing') return
+    const rect = this.canvas.getBoundingClientRect()
+    const field = this.playfield
+    const x = (clientX - rect.left - field.x) / field.width
+    const y = (clientY - rect.top - field.y) / field.height
+    const stamp = eventTime > performance.now() + 1000 ? eventTime - performance.timeOrigin : eventTime
+    const time = this.audioProcessor.timeAt(stamp) + this.timingOffset / 1000
+    this.feedback = this.gameWorld!.hit(x, y, time, field.width, field.height, field.radius + 8)
+    this.emit()
+  }
+
   private keydown = (event: KeyboardEvent) => {
-    if ((event.target as HTMLElement)?.closest('button, input, select, textarea, a')) return
-    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) event.preventDefault()
-    this.keys.add(event.code)
-    if (event.repeat) return
+    if ((event.target as HTMLElement)?.closest('button, input, select, textarea, a') || event.repeat) return
     if (event.code === 'Space') {
+      event.preventDefault()
       if (this.gameState === 'playing' || this.gameState === 'countdown') this.pauseGame()
       else if (this.gameState === 'paused') void this.resumeGame()
     }
-    if (event.code === 'KeyR' && ['complete', 'gameOver'].includes(this.gameState)) this.restartGame()
-    const mode = ({ Digit1: 'bass', Digit2: 'mid', Digit3: 'high' } as const)[event.code]
-    if (mode) this.setMode(mode)
+    if (event.code === 'KeyR' && this.gameState === 'complete') void this.restartGame()
   }
-  private keyup = (event: KeyboardEvent) => { this.keys.delete(event.code) }
-  private blur = () => { this.keys.clear(); this.pauseGame() }
-  private visibility = () => { if (document.hidden) this.blur() }
-
+  private blur = () => { this.pauseGame() }
+  private visibility = () => { if (document.hidden) this.pauseGame() }
   async unlockAudio() { await this.audioProcessor.initialize() }
-  setMode(mode: FrequencyMode) { this.player.mode = mode; this.emit() }
 
-  startGame(difficulty = 'Easy') {
+  async startGame(difficulty = 'Easy') {
     if (!this.audioProcessor.hasAudio) throw new Error('Choose or upload a song first.')
     this.difficulty = difficulty
     this.audioProcessor.rewind()
-    this.player = new Player()
     this.gameWorld = new GameWorld(this.audioProcessor.beatMap, this.audioProcessor.duration, difficulty)
-    this.countdownRemaining = 3
-    this.feedback = ''
+    if (!this.gameWorld.targets.length) throw new Error('No clear beat targets were found. Try another recording.')
+    this.feedback = null
+    this.countdownRemaining = 4 * 60 / this.audioProcessor.beatMap.bpm + 0.08
     this.gameState = 'countdown'
     this.emit()
+    try { await this.audioProcessor.startPlayback(this.countdownRemaining, true) }
+    catch (error) { this.returnToMenu(); throw error }
   }
 
   pauseGame() {
     if (this.gameState !== 'playing' && this.gameState !== 'countdown') return
     this.pausedState = this.gameState
+    this.pausedTime = this.time
+    if (this.gameState === 'countdown' && this.audioProcessor.isPlaying) this.countdownRemaining = Math.max(0, -this.audioProcessor.timeAt())
     this.audioProcessor.stopPlayback()
     this.gameState = 'paused'
     this.emit()
@@ -124,222 +151,145 @@ export class FrequencyFrontierGame {
 
   async resumeGame() {
     if (this.gameState !== 'paused') return
-    const resumedState = this.pausedState
-    this.gameState = resumedState
-    this.emit()
+    this.gameState = this.pausedState
     try {
-      if (resumedState === 'playing') await this.audioProcessor.startPlayback()
+      await this.audioProcessor.startPlayback(this.pausedState === 'countdown' ? this.countdownRemaining : 0, this.pausedState === 'countdown')
     } catch {
-      if (this.disposed) return
       this.gameState = 'paused'
-      this.feedback = 'Audio could not resume. Try again.'
-      this.emit()
     }
+    this.emit()
   }
 
-  restartGame() { this.startGame(this.difficulty) }
+  async restartGame() { await this.startGame(this.difficulty) }
   returnToMenu() {
     this.audioProcessor.rewind()
     this.gameState = 'menu'
     this.gameWorld = null
-    this.keys.clear()
+    this.feedback = null
     this.emit()
   }
 
   private emit() {
-    const time = this.audioProcessor.currentTime
+    const stats = this.gameWorld?.stats
+    const field = this.playfield
     this.onUpdate?.({
-      state: this.gameState, score: this.player.score, health: this.player.health, mode: this.player.mode,
-      combo: this.player.combo, multiplier: this.player.multiplier, progress: time, duration: this.audioProcessor.duration,
+      state: this.gameState, score: stats?.score || 0, combo: stats?.combo || 0, multiplier: stats?.multiplier || 1,
+      progress: Math.max(0, Math.min(this.audioProcessor.duration, this.time)), duration: this.audioProcessor.duration,
       bpm: this.audioProcessor.beatMap.bpm, confidence: this.audioProcessor.beatMap.confidence,
-      feedback: time < this.feedbackUntil || this.gameState === 'paused' ? this.feedback : '', countdown: Math.ceil(this.countdownRemaining),
-      collected: this.player.collected, perfect: this.player.perfect, missed: this.player.missed, bestCombo: this.player.bestCombo,
-      burst: time < this.player.burstUntil, levels: this.audioProcessor.getNormalizedLevels()
+      feedback: this.feedback, countdown: Math.min(4, Math.max(1, Math.ceil(this.countdownRemaining / (60 / this.audioProcessor.beatMap.bpm)))),
+      counts: { ...(stats?.counts || initialSnapshot.counts) }, accuracy: stats?.accuracy ?? 100, bestCombo: stats?.bestCombo || 0,
+      totalTargets: this.gameWorld?.targets.length || 0, stray: stats?.stray || 0, meanError: stats?.meanError || 0,
+      errors: stats?.errors.slice(-24) || [],
+      targets: this.gameWorld?.active.filter(target => !target.resolved).map(target => ({
+        id: target.id, x: field.x + target.x * field.width, y: field.y + target.y * field.height, radius: field.radius
+      })) || []
     })
   }
 
   private loop = (now: number) => {
     if (this.disposed) return
-    const delta = Math.min(0.05, Math.max(0, (now - (this.lastFrame || now)) / 1000))
-    this.lastFrame = now
-    if (this.gameState === 'countdown') {
-      this.countdownRemaining -= delta
-      if (this.countdownRemaining <= 0) {
-        this.gameState = 'playing'
-        void this.audioProcessor.startPlayback().catch(() => {
-          this.gameState = 'paused'
-          this.pausedState = 'playing'
-          this.feedback = 'Audio could not start. Press Resume to try again.'
-          this.emit()
-        })
+    const rawTime = this.audioProcessor.timeAt()
+    if (this.gameState === 'countdown' && this.audioProcessor.isPlaying) {
+      this.countdownRemaining = Math.max(0, -rawTime)
+      if (rawTime >= 0) this.gameState = 'playing'
+    }
+    if (this.gameState === 'playing') {
+      this.audioProcessor.update()
+      const lastFeedback = this.gameWorld!.lastHit
+      this.gameWorld!.update(this.time)
+      if (this.gameWorld!.lastHit !== lastFeedback) this.feedback = this.gameWorld!.lastHit
+      if (this.audioProcessor.ended) {
+        this.gameWorld!.finish(this.time)
+        this.gameState = 'complete'
+        this.audioProcessor.stopPlayback()
+        this.emit()
       }
     }
-    if (this.gameState === 'playing') this.update(delta)
     this.draw()
-    if ((this.gameState === 'playing' || this.gameState === 'countdown') && now - this.lastUpdate > 80) {
-      this.lastUpdate = now
-      this.emit()
-    }
+    if ((this.gameState === 'playing' || this.gameState === 'countdown') && now - this.lastUpdate > 50) { this.lastUpdate = now; this.emit() }
     this.frame = requestAnimationFrame(this.loop)
   }
 
-  private update(delta: number) {
-    this.audioProcessor.update()
-    const time = this.audioProcessor.currentTime + this.timingOffset / 1000
-    const player = this.player
-    const horizontal = Number(this.keys.has('ArrowRight') || this.keys.has('KeyD')) - Number(this.keys.has('ArrowLeft') || this.keys.has('KeyA'))
-    const vertical = Number(this.keys.has('ArrowDown') || this.keys.has('KeyS')) - Number(this.keys.has('ArrowUp') || this.keys.has('KeyW'))
-    if (horizontal || vertical) {
-      player.targetX = player.x + horizontal * delta * 0.7
-      player.targetY = player.y + vertical * delta * 0.9
+  private drawTarget(target: BeatTarget, next: boolean, time: number) {
+    const ctx = this.ctx
+    const field = this.playfield
+    const remaining = target.time - time
+    const fraction = Math.max(0, Math.min(1, remaining / approachTime(this.difficulty)))
+    const x = field.x + target.x * field.width
+    const y = field.y + target.y * field.height
+    const color = next ? '#5df3d1' : '#8aa5df'
+    const radius = field.radius
+    ctx.save(); ctx.translate(x, y)
+    ctx.globalAlpha = next ? 1 : 0.48
+    ctx.strokeStyle = color; ctx.fillStyle = next ? '#16363b' : '#141e33'; ctx.lineWidth = next ? 3 : 2
+    ctx.shadowColor = color; ctx.shadowBlur = this.reducedMotion ? 0 : this.intensity * (next ? 16 : 5)
+    ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke()
+    ctx.shadowBlur = 0
+    // The approach ring remains functional under reduced motion; decorative
+    // motion is disabled. A radial progress arc supplies a second timing cue.
+    ctx.globalAlpha = next ? 0.8 : 0.3
+    ctx.lineWidth = 2
+    ctx.beginPath(); ctx.arc(0, 0, radius + fraction * radius * 1.7, 0, Math.PI * 2); ctx.stroke()
+    ctx.lineWidth = 4
+    ctx.beginPath(); ctx.arc(0, 0, radius - 7, -Math.PI / 2, -Math.PI / 2 + (1 - fraction) * Math.PI * 2); ctx.stroke()
+    ctx.globalAlpha = next ? 1 : 0.65
+    ctx.fillStyle = '#edf8ff'; ctx.font = `bold ${radius * 0.65}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText(String(target.id), 0, 1)
+    if (next) {
+      ctx.font = '10px monospace'; ctx.fillStyle = color
+      ctx.fillText(remaining < 0 ? 'LATE' : remaining <= 0.045 ? 'HIT!' : 'NEXT', 0, -radius - 14)
     }
-    player.move(delta, this.width, this.height)
-    this.gameWorld!.update(time, delta)
-    for (const encounter of this.gameWorld!.active) {
-      const x = 0.28 + (encounter.time - time) * 0.28
-      const distance = Math.hypot((x - player.x) * this.width, (encounter.y - player.y) * this.height)
-      // Resolve notes at their closest horizontal approach, so a player on the
-      // beat line can earn Perfect rather than collecting at the leading edge.
-      if (distance < (encounter.kind === 'note' ? 32 : 40) && (encounter.kind === 'hazard' || x <= player.x)) {
-        encounter.resolved = true
-        if (encounter.kind === 'note') {
-          const grade = timingGrade(time - encounter.time)
-          const matched = player.mode === encounter.mode
-          player.collect(grade, matched, time)
-          this.feedback = matched ? `${grade}${player.combo >= 16 && player.combo % 16 === 0 ? ' · RESONANCE!' : ''}` : 'Collected · match the symbol for combos'
-          this.gameWorld!.explode(x, encounter.y, modeColors[encounter.mode], this.reducedMotion)
-        } else if (player.mode === 'bass') {
-          player.score += 75
-          this.feedback = 'Phased! +75'
-          this.gameWorld!.explode(x, encounter.y, modeColors.bass, this.reducedMotion)
-        } else if (player.damage(time)) {
-          this.feedback = 'Hit! Switch to bass or dodge'
-          this.gameWorld!.explode(player.x, player.y, '#ff708d', this.reducedMotion)
-        }
-        this.feedbackUntil = time + 0.65
-      } else if (x < -0.05) {
-        encounter.resolved = true
-        if (encounter.kind === 'note') { player.missed++; player.combo = 0 }
-      }
-    }
-    if (player.health <= 0) {
-      this.gameState = 'gameOver'
-      this.audioProcessor.stopPlayback()
-      this.emit()
-    } else if (this.audioProcessor.ended) {
-      for (const encounter of this.gameWorld!.encounters) {
-        if (!encounter.resolved && encounter.kind === 'note') { player.missed++; encounter.resolved = true }
-      }
-      this.gameState = 'complete'
-      this.audioProcessor.stopPlayback()
-      this.emit()
-    }
+    ctx.restore()
   }
 
   private draw() {
-    const ctx = this.ctx
-    const w = this.width
-    const h = this.height
-    const time = this.audioProcessor.currentTime + this.timingOffset / 1000
-    const active = this.gameState !== 'menu'
-    const levels = this.audioProcessor.getNormalizedLevels()
+    const ctx = this.ctx, w = this.width, h = this.height
+    const time = Math.max(0, this.time)
     const motion = this.reducedMotion ? 0 : this.intensity
-    const pulse = active ? Math.max(0, 1 - nearestBeatDistance(time, this.audioProcessor.beatMap) / 0.18) : 0
-    ctx.clearRect(0, 0, w, h)
-    ctx.fillStyle = '#070d1c'
-    ctx.fillRect(0, 0, w, h)
-    const gradient = ctx.createRadialGradient(w * 0.55, h * 0.5, 10, w * 0.55, h * 0.5, w * 0.7)
-    gradient.addColorStop(0, `rgba(23,54,86,${0.45 + levels.bass * motion * 0.35})`)
+    const playing = this.gameState === 'playing'
+    const pulse = playing ? Math.max(0, 1 - nearestBeatDistance(time, this.audioProcessor.beatMap) / 0.14) : 0
+    ctx.fillStyle = '#070d1c'; ctx.fillRect(0, 0, w, h)
+    const gradient = ctx.createRadialGradient(w * 0.5, h * 0.5, 20, w * 0.5, h * 0.5, w * 0.7)
+    gradient.addColorStop(0, `rgba(30,67,86,${0.45 + pulse * motion * 0.18})`)
     gradient.addColorStop(1, 'rgba(7,13,28,0)')
-    ctx.fillStyle = gradient
-    ctx.fillRect(0, 0, w, h)
-    ctx.lineWidth = 1
-    ctx.strokeStyle = `rgba(83,144,177,${0.08 + pulse * motion * 0.08})`
-    ctx.beginPath()
-    const shift = (time * 18 * motion) % 60
-    for (let x = -60 + shift; x < w; x += 60) { ctx.moveTo(x, 0); ctx.lineTo(x, h) }
+    ctx.fillStyle = gradient; ctx.fillRect(0, 0, w, h)
+    ctx.strokeStyle = 'rgba(83,144,177,0.07)'; ctx.lineWidth = 1; ctx.beginPath()
+    for (let x = 0; x < w; x += 60) { ctx.moveTo(x, 0); ctx.lineTo(x, h) }
     for (let y = 0; y < h; y += 60) { ctx.moveTo(0, y); ctx.lineTo(w, y) }
     ctx.stroke()
-
     const spectrum = this.audioProcessor.getVisualizationData()
     for (let i = 0; i < spectrum.length; i++) {
       ctx.fillStyle = i < 22 ? '#ff708d' : i < 44 ? '#5df3d1' : '#b396ff'
-      ctx.globalAlpha = 0.1 + motion * 0.12
-      const barHeight = 8 + spectrum[i] * h * 0.24 * (this.reducedMotion ? 0.35 : 1)
+      ctx.globalAlpha = 0.08 + motion * 0.12
+      const barHeight = 5 + spectrum[i] * Math.min(90, h * 0.14) * (this.reducedMotion ? 0.35 : 1)
       ctx.fillRect(i * w / spectrum.length, h - barHeight, w / spectrum.length - 3, barHeight)
     }
     ctx.globalAlpha = 1
-    if (!active) return
-
-    // The collection line is a consistent spatial reference for beat timing.
-    ctx.strokeStyle = `rgba(93,243,209,${0.15 + pulse * motion * 0.25})`
-    ctx.setLineDash([4, 10])
-    ctx.beginPath(); ctx.moveTo(w * 0.28, h * 0.14); ctx.lineTo(w * 0.28, h * 0.88); ctx.stroke()
-    ctx.setLineDash([])
-    ctx.fillStyle = '#6d879e'; ctx.font = '10px monospace'; ctx.fillText('BEAT LINE', w * 0.28 - 27, h * 0.1)
-
-    const upcoming = this.gameWorld?.encounters.find(encounter => !encounter.resolved && encounter.kind === 'note' && encounter.time > time)
-    if (upcoming) {
-      ctx.strokeStyle = modeColors[upcoming.mode]
-      ctx.globalAlpha = 0.2 + pulse * motion * 0.15
-      ctx.beginPath(); ctx.arc(w * 0.28, upcoming.y * h, 28, 0, Math.PI * 2); ctx.stroke()
-      ctx.globalAlpha = 1
+    if (this.gameState === 'menu' || this.gameState === 'countdown') return
+    const targets = this.gameWorld?.active.filter(target => !target.resolved) || []
+    const field = this.playfield
+    if (targets.length > 1) {
+      ctx.strokeStyle = '#567a9366'; ctx.setLineDash([3, 8]); ctx.beginPath()
+      ctx.moveTo(field.x + targets[0].x * field.width, field.y + targets[0].y * field.height)
+      ctx.lineTo(field.x + targets[1].x * field.width, field.y + targets[1].y * field.height)
+      ctx.stroke(); ctx.setLineDash([])
     }
-    for (const encounter of this.gameWorld?.active || []) {
-      if (encounter.resolved) continue
-      const x = (0.28 + (encounter.time - time) * 0.28) * w
-      const y = encounter.y * h
-      if (x > w + 40 || x < -40) continue
-      const color = encounter.kind === 'note' ? modeColors[encounter.mode] : '#ff9c6c'
-      ctx.save(); ctx.translate(x, y)
-      ctx.shadowColor = color; ctx.shadowBlur = 10 * motion
-      ctx.strokeStyle = color; ctx.fillStyle = encounter.kind === 'note' ? '#122333' : '#311c26'; ctx.lineWidth = 2
-      ctx.beginPath()
-      if (encounter.kind === 'hazard') {
-        for (let i = 0; i < 16; i++) {
-          const angle = i / 16 * Math.PI * 2
-          const radius = i % 2 ? 16 : 26
-          if (!i) ctx.moveTo(Math.cos(angle) * radius, Math.sin(angle) * radius)
-          else ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius)
-        }
-        ctx.closePath()
-      } else if (encounter.mode === 'high') {
-        ctx.moveTo(0, -15); ctx.lineTo(15, 0); ctx.lineTo(0, 15); ctx.lineTo(-15, 0); ctx.closePath()
-      } else if (encounter.mode === 'bass') ctx.rect(-12, -12, 24, 24)
-      else ctx.arc(0, 0, 13, 0, Math.PI * 2)
-      ctx.fill(); ctx.stroke()
-      ctx.shadowBlur = 0; ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.font = 'bold 11px monospace'
-      ctx.fillText(encounter.kind === 'hazard' ? '!' : encounter.mode === 'bass' ? '1' : encounter.mode === 'mid' ? '2' : '3', 0, 4)
+    for (let i = targets.length - 1; i >= 0; i--) this.drawTarget(targets[i], i === 0, time)
+    for (const hit of this.gameWorld?.feedback || []) {
+      const age = time - hit.time
+      if (age < 0 || age > 0.85) continue
+      const x = field.x + hit.x * field.width
+      const y = field.y + hit.y * field.height
+      ctx.save()
+      ctx.globalAlpha = Math.max(0, 1 - age / 0.85)
+      ctx.fillStyle = judgmentColors[hit.grade]; ctx.textAlign = 'center'; ctx.font = 'bold 14px monospace'
+      ctx.fillText(describeTiming(hit.grade, hit.errorMs), Math.max(100, Math.min(w - 100, x)), y - field.radius - 30 - age * 20 * motion)
+      if (hit.grade !== 'Too early' && hit.grade !== 'No target') {
+        ctx.strokeStyle = judgmentColors[hit.grade]; ctx.lineWidth = 2
+        ctx.beginPath(); ctx.arc(x, y, field.radius + age * 65 * motion, 0, Math.PI * 2); ctx.stroke()
+      }
       ctx.restore()
     }
-
-    const player = this.player
-    const color = modeColors[player.mode]
-    if (!this.reducedMotion && player.trail.length > 1) {
-      ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.globalAlpha = 0.25
-      ctx.beginPath()
-      player.trail.forEach((point, index) => { if (!index) ctx.moveTo(point.x * w, point.y * h); else ctx.lineTo(point.x * w, point.y * h) })
-      ctx.stroke(); ctx.globalAlpha = 1
-    }
-    ctx.save(); ctx.translate(player.x * w, player.y * h)
-    ctx.shadowColor = color; ctx.shadowBlur = 18 * motion
-    ctx.globalAlpha = time < player.invulnerableUntil ? 0.55 : 1
-    ctx.strokeStyle = color; ctx.lineWidth = 2
-    ctx.beginPath(); ctx.arc(0, 0, 22 + pulse * motion * 9, 0, Math.PI * 2); ctx.stroke()
-    if (time < player.burstUntil) {
-      ctx.strokeStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, 36, 0, Math.PI * 2); ctx.stroke()
-    }
-    ctx.fillStyle = color; ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill()
-    ctx.restore()
-    if (motion > 0) {
-      ctx.strokeStyle = color; ctx.globalAlpha = pulse * motion * 0.15
-      ctx.beginPath(); ctx.arc(player.x * w, player.y * h, 40 + (1 - pulse) * 120, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1
-    }
-    for (const particle of this.gameWorld?.particles || []) {
-      ctx.globalAlpha = Math.max(0, particle.life / 0.6) * motion
-      ctx.fillStyle = particle.color; ctx.beginPath(); ctx.arc(particle.x * w, particle.y * h, 3, 0, Math.PI * 2); ctx.fill()
-    }
-    ctx.globalAlpha = 1
   }
 
   dispose() {
@@ -347,9 +297,7 @@ export class FrequencyFrontierGame {
     cancelAnimationFrame(this.frame)
     this.resizeObserver.disconnect()
     this.canvas.removeEventListener('pointerdown', this.pointer)
-    this.canvas.removeEventListener('pointermove', this.pointer)
     window.removeEventListener('keydown', this.keydown)
-    window.removeEventListener('keyup', this.keyup)
     window.removeEventListener('blur', this.blur)
     document.removeEventListener('visibilitychange', this.visibility)
     this.audioProcessor.dispose()

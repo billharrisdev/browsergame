@@ -8,7 +8,7 @@ await mkdir(folder, { recursive: true })
 for (const track of tracks) {
   const destination = new URL(`${track.id}.mp3`, folder)
   try { if ((await stat(destination)).size > 1000) { console.log(`Already downloaded: ${track.title}`); continue } } catch {}
-  const url = `https://incompetech.com/music/royalty-free/mp3-royaltyfree/${encodeURIComponent(track.filename)}`
+  const url = track.download || `https://incompetech.com/music/royalty-free/mp3-royaltyfree/${encodeURIComponent(track.filename)}`
   let data
   for (let attempt = 0; attempt < 3; attempt++) {
     try {

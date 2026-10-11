@@ -1,4 +1,4 @@
-import { analyzeBeats, BeatMap } from './rhythm'
+import { buildSongChart, BeatMap } from './rhythm'
 
 export class AudioProcessor {
   public isInitialized = false
@@ -13,14 +13,16 @@ export class AudioProcessor {
   private playing = false
   private playbackVersion = 0
   private disposed = false
+  private countInNodes: OscillatorNode[] = []
   private data = new Uint8Array(1024)
   private bands = new Float32Array(64)
   private levels = { bass: 0, mid: 0, high: 0 }
 
   get duration() { return this.buffer?.duration || 0 }
   get hasAudio() { return !!this.buffer }
+  get isPlaying() { return this.playing }
   get currentTime() {
-    return Math.min(this.duration, this.offset + (this.playing && this.context ? this.context.currentTime - this.startedAt : 0))
+    return Math.max(0, Math.min(this.duration, this.offset + (this.playing && this.context ? this.context.currentTime - this.startedAt : 0)))
   }
   get ended() { return this.hasAudio && this.currentTime >= this.duration }
 
@@ -40,25 +42,34 @@ export class AudioProcessor {
     await this.context.resume()
   }
 
-  async loadAudio(data: ArrayBuffer, bpm?: number) {
+  async loadAudio(data: ArrayBuffer, bpm?: number, chart?: BeatMap) {
     await this.initialize()
     const buffer = await this.context!.decodeAudioData(data)
     if (this.disposed) throw new Error('Audio player has been closed.')
-    // Average stereo channels for analysis without changing playback.
-    const samples = new Float32Array(buffer.length)
-    for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
-      const values = buffer.getChannelData(channel)
-      for (let i = 0; i < values.length; i++) samples[i] += values[i] / buffer.numberOfChannels
+    const validChart = chart?.version === 2 && chart.beats?.length > 0 && Number.isFinite(chart.bpm) && chart.bpm > 0
+      && Math.abs((chart.duration || 0) - buffer.duration) < 0.2
+      && chart.beats.every((time, index) => Number.isFinite(time) && time >= 0 && time < buffer.duration && (index === 0 || time > chart.beats[index - 1]))
+      && chart.notes?.every((time, index) => Number.isFinite(time) && time >= 0 && time < buffer.duration && (index === 0 || time > chart.notes![index - 1]))
+    let beatMap = chart
+    if (!validChart) {
+      // Stored charts avoid scanning the recording again. Uploads average stereo
+      // channels for analysis without changing the playback recording.
+      const samples = new Float32Array(buffer.length)
+      for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+        const values = buffer.getChannelData(channel)
+        for (let i = 0; i < values.length; i++) samples[i] += values[i] / buffer.numberOfChannels
+      }
+      beatMap = buildSongChart(samples, buffer.sampleRate, bpm)
     }
     this.stopPlayback()
     this.buffer = buffer
     this.offset = 0
-    this.beatMap = analyzeBeats(samples, buffer.sampleRate, bpm)
+    this.beatMap = beatMap!
   }
 
   async loadAudioFile(file: File) { await this.loadAudio(await file.arrayBuffer()); return true }
 
-  async startPlayback() {
+  async startPlayback(delay = 0, countIn = false) {
     const version = this.playbackVersion
     await this.initialize()
     if (this.disposed || version !== this.playbackVersion) return
@@ -69,7 +80,7 @@ export class AudioProcessor {
     source.buffer = this.buffer
     source.connect(this.analyser!)
     this.source = source
-    this.startedAt = this.context!.currentTime
+    this.startedAt = this.context!.currentTime + delay
     this.playing = true
     source.onended = () => {
       if (this.source !== source) return
@@ -78,13 +89,47 @@ export class AudioProcessor {
       source.disconnect()
       this.source = null
     }
-    source.start(0, this.offset)
+    source.start(this.startedAt, this.offset)
+    if (countIn && delay > 0) {
+      const period = 60 / this.beatMap.bpm
+      for (let at = this.startedAt - period; at >= this.context!.currentTime + 0.01; at -= period) {
+        const oscillator = this.context!.createOscillator()
+        const gain = this.context!.createGain()
+        oscillator.type = 'sine'
+        oscillator.frequency.value = 800
+        gain.gain.setValueAtTime(0.16, at)
+        gain.gain.exponentialRampToValueAtTime(0.001, at + 0.06)
+        oscillator.connect(gain)
+        gain.connect(this.gain!)
+        oscillator.start(at)
+        oscillator.stop(at + 0.07)
+        oscillator.onended = () => { oscillator.disconnect(); gain.disconnect() }
+        this.countInNodes.push(oscillator)
+      }
+    }
+  }
+
+  // Translate a pointer event's performance timestamp into the audio that was
+  // reaching the output device at that instant, independent of animation FPS.
+  timeAt(performanceTime = performance.now()) {
+    if (!this.context || !this.playing) return this.offset
+    const timestamp = this.context.getOutputTimestamp?.()
+    let audibleContext: number
+    if (timestamp?.performanceTime > 0 && timestamp.contextTime > 0) {
+      audibleContext = timestamp.contextTime + (performanceTime - timestamp.performanceTime) / 1000
+    } else {
+      const latency = (this.context.baseLatency || 0) + (this.context.outputLatency || 0)
+      audibleContext = this.context.currentTime - latency + (performanceTime - performance.now()) / 1000
+    }
+    return this.offset + audibleContext - this.startedAt
   }
 
   stopPlayback() {
     this.playbackVersion++
     this.offset = this.currentTime
     this.playing = false
+    for (const oscillator of this.countInNodes) { try { oscillator.stop() } catch {} }
+    this.countInNodes = []
     if (this.source) {
       this.source.onended = null
       this.source.stop()
