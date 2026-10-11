@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import GameCanvas from './GameCanvas'
 import GameUI, { formatTime } from './GameUI'
 import { FrequencyFrontierGame, initialSnapshot } from '../lib/game-engine'
-import { tracks, trackAudio, trackChart, trackPage, musicLicense, levelChoices, levelsFor, songsForLevel, uploadLevels, LevelId } from '../lib/music'
+import { tracks, trackAudio, trackChart, trackPage, musicLicense } from '../lib/music'
+import { levelChoices, levelsFor, songsForLevel, uploadLevels, type LevelId } from '../lib/music/levels'
 
 export default function GameContainer() {
   const [snapshot, setSnapshot] = useState(initialSnapshot)
@@ -35,7 +36,7 @@ export default function GameContainer() {
   const scoreKey = `levels-v4:${songKey}:${difficulty}`
   const title = uploaded ? uploaded.name.replace(/\.[^.]+$/, '') : selected.title
   const level = levelChoices.find(choice => choice.id === difficulty) || levelChoices[0]
-  const compatible = (id: LevelId) => songsForLevel(id)
+  const compatible = (id: LevelId) => songsForLevel(id, tracks)
   const visibleTracks = compatible(difficulty as LevelId).filter(track => track.collection === collection && (genre === 'All' || track.genre === genre))
   const uploadFits = uploadLevels.includes(difficulty as LevelId)
   const canStart = level.playable && (uploaded ? uploadFits : levelsFor(selected).includes(difficulty as LevelId))
@@ -160,7 +161,7 @@ export default function GameContainer() {
     setDifficulty(next)
     setError('')
     if (uploaded) return
-    const visible = songsForLevel(next).filter(track => track.collection === collection && (genre === 'All' || track.genre === genre))
+    const visible = songsForLevel(next, tracks).filter(track => track.collection === collection && (genre === 'All' || track.genre === genre))
     if (visible.length && !visible.some(track => track.id === selectedId)) setSelectedId(visible[0].id)
   }
 
@@ -169,7 +170,7 @@ export default function GameContainer() {
     setCollection(next)
     setGenre('All')
     setUploaded(null)
-    const first = songsForLevel(difficulty as LevelId).find(track => track.collection === next)
+    const first = songsForLevel(difficulty as LevelId, tracks).find(track => track.collection === next)
     if (first) setSelectedId(first.id)
     setError('')
   }
@@ -179,7 +180,7 @@ export default function GameContainer() {
     setGenre(next)
     setUploaded(null)
     if (next === 'All') return
-    const first = songsForLevel(difficulty as LevelId).find(track => track.collection === collection && track.genre === next)
+    const first = songsForLevel(difficulty as LevelId, tracks).find(track => track.collection === collection && track.genre === next)
     if (first) setSelectedId(first.id)
     setError('')
   }

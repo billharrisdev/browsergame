@@ -1,4 +1,8 @@
 import catalog from './tracks.json'
+import { songsForLevel as filterSongs, type LevelId } from './levels'
+
+export type { LevelId } from './levels'
+export { levelChoices, levelsFor, uploadLevels } from './levels'
 
 export interface Track {
   id: string
@@ -20,11 +24,10 @@ export interface Track {
   tempoMap?: { startTime: number; bpm: number }[]
   levels?: LevelId[]
 }
-export type { LevelId } from './levels'
-export { levelChoices, levelsFor, uploadLevels } from './levels'
-import { songsForLevel as filterSongs, LevelId } from './levels'
-export const tracks = (catalog as Track[]).map(track => ({ ...track, artist: track.artist || 'Kevin MacLeod', collection: track.collection || 'original' }))
-export const songsForLevel = (level: LevelId, list: Track[] = tracks) => filterSongs(level, list)
+export const tracks = (catalog as Track[]).map(track => ({ ...track, artist: track.artist || 'Kevin MacLeod', collection: track.collection || 'original' as const }))
+export function songsForLevel(level: LevelId, list: Track[] = tracks) {
+  return filterSongs(level, list)
+}
 export const musicLicense = 'https://creativecommons.org/licenses/by/4.0/'
 export const trackPage = (track: Track) => track.source || `https://incompetech.com/music/royalty-free/index.html?isrc=${track.isrc}`
 export const trackAudio = (track: Track) => `/music/${track.id}.mp3`
