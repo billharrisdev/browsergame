@@ -8,6 +8,7 @@ export default function BeatCheck({ track, onClose }: { track: Track; onClose: (
   const [grid, setGrid] = useState<CheckGrid>('pulse')
   const [click, setClick] = useState(true)
   const [nudge, setNudge] = useState(0)
+  const [mix, setMix] = useState(0.4)
   const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(track.duration)
@@ -23,6 +24,7 @@ export default function BeatCheck({ track, onClose }: { track: Track; onClose: (
   const gridRef = useRef<HTMLDivElement>(null)
   const audio = useRef<AudioContext | null>(null)
   const gain = useRef<GainNode | null>(null)
+  const songGain = useRef<GainNode | null>(null)
   const buffer = useRef<AudioBuffer | null>(null)
   const source = useRef<AudioBufferSourceNode | null>(null)
   const clicks = useRef<{ time: number; accent: boolean }[]>([])
@@ -83,7 +85,7 @@ export default function BeatCheck({ track, onClose }: { track: Track; onClose: (
     if (offset.current >= buffer.current.duration - 0.05) offset.current = 0
     const node = context.createBufferSource()
     node.buffer = buffer.current
-    node.connect(gain.current!)
+    node.connect(songGain.current!)
     source.current = node
     startedAt.current = context.currentTime
     playingRef.current = true
@@ -96,10 +98,13 @@ export default function BeatCheck({ track, onClose }: { track: Track; onClose: (
   useEffect(() => {
     const context = new AudioContext()
     const output = context.createGain()
-    output.gain.value = 0.7
+    const music = context.createGain()
+    music.gain.value = 0.4
+    music.connect(output)
     output.connect(context.destination)
     audio.current = context
     gain.current = output
+    songGain.current = music
     let cancelled = false
     ;(async () => {
       try {
@@ -134,6 +139,20 @@ export default function BeatCheck({ track, onClose }: { track: Track; onClose: (
   }, [track])
 
   useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  useEffect(() => {
+    if (songGain.current) songGain.current.gain.value = mix
+  }, [mix])
+
+  useEffect(() => {
     clicks.current = checkClicks(beats.current, meter.current, grid)
     nudgeRef.current = nudge / 1000
     clickRef.current = click
@@ -157,7 +176,8 @@ export default function BeatCheck({ track, onClose }: { track: Track; onClose: (
 
   return <div className="game-overlay beat-check" role="dialog" aria-label={`Beat check for ${track.title}`}>
     <section className={`overlay-card beat-check-card ${flash > 0.45 ? 'flashing' : ''}`}>
-      <div className="dialog-header"><div><span className="eyebrow">DEBUG · ESTIMATED GRID</span><h2>{track.title}</h2></div><button className="small-button" onClick={onClose}>Close</button></div>
+      <div className="dialog-header"><div><span className="eyebrow">DEBUG · ESTIMATED GRID</span><h2>{track.title}</h2></div><button className="small-button" onClick={onClose} autoFocus>Close</button></div>
+      <div className="beat-check-body">
       <div className="beat-check-readout" aria-live="polite">
         <svg className="beat-ring" viewBox="0 0 160 160" role="img" aria-label={`Beat ${barBeat || 'not started'}, phase ${Math.round(phase * 100)} percent`}>
           <circle cx="80" cy="80" r="62" fill="none" stroke="#24384c" strokeWidth="8" />
@@ -172,6 +192,7 @@ export default function BeatCheck({ track, onClose }: { track: Track; onClose: (
       <input aria-label="Song position" type="range" min="0" max={duration || 0} step="0.1" value={Math.min(time, duration || 0)} onChange={event => seek(Number(event.target.value))} />
       <div className="beat-check-tools"><span>{formatTime(time)} / {formatTime(duration)}</span><button className="primary-button" onClick={() => playing ? (stopSource(), setPlaying(false)) : void startSource()}>{playing ? 'Pause' : 'Play song'}</button><button className="secondary-button" aria-pressed={click} onClick={() => setClick(value => !value)}>{click ? 'Click on' : 'Click off'}</button></div>
       <div className="genre-filters" aria-label="Beat interpretations">{checkGrids.map(item => <button key={item.id} className={grid === item.id ? 'active' : ''} aria-pressed={grid === item.id} onClick={() => setGrid(item.id)}>{item.label}</button>)}</div>
+      <label className="beat-nudge">Song mix <span>{Math.round(mix * 100)}%</span><input aria-label="Recorded audio mix" type="range" min="0" max="1" step="0.05" value={mix} onChange={event => setMix(Number(event.target.value))} /></label>
       <label className="beat-nudge">Click nudge <span>{nudge > 0 ? '+' : ''}{nudge} ms</span><input type="range" min="-100" max="100" step="10" value={nudge} onChange={event => setNudge(Number(event.target.value))} /></label>
       <div className="timing-grid" ref={gridRef} aria-label="Detected beats arranged by bar">
         <div className="timing-row timing-head" style={{ gridTemplateColumns: `42px repeat(${bars}, 1fr)` }}>{['Bar', ...Array.from({ length: bars }, (_, index) => index + 1)].map(label => <span key={label}>{label}</span>)}</div>
@@ -188,6 +209,7 @@ export default function BeatCheck({ track, onClose }: { track: Track; onClose: (
       <p className="timing-legend"><i className="locked" /> within 20 ms <i className="early" /> early <i className="late" /> late <i className="missing" /> no attack. Click a cell to jump there.</p>
       <p>Nothing here is saved. Positive nudge makes the click later. Compare the click with the drums, then close and tell me which interpretation matches.</p>
       {error && <p className="error-message" role="alert">{error}</p>}
+      </div>
     </section>
   </div>
 }

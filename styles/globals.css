@@ -59,8 +59,10 @@ a { color: var(--mint); }
 .preview-button { flex-shrink: 0; width: 32px; height: 32px; border: 1px solid #3b4b63; border-radius: 50%; background: transparent; color: #a6bdd4; font-size: 10px; margin-right: 12px; }
 .preview-button:hover { color: var(--mint); border-color: var(--mint); }
 .check-button { flex-shrink: 0; margin-right: 10px; border: 1px solid #5df3d166; border-radius: 6px; background: transparent; color: var(--mint); font-size: 10px; padding: 6px 8px; }
-.beat-check { overflow: auto; align-items: flex-start; padding-top: 28px; }
-.beat-check-card { text-align: left; max-width: 760px; width: min(760px, calc(100% - 24px)); }
+.game-overlay.beat-check { align-items: flex-start; justify-content: center; overflow: auto; padding: 16px; }
+.overlay-card.beat-check-card { display: flex; flex-direction: column; text-align: left; max-width: 760px; width: min(760px, calc(100% - 8px)); max-height: calc(100svh - 32px); overflow: hidden; padding: 18px 22px 16px; }
+.beat-check-card .dialog-header { flex-shrink: 0; margin-bottom: 8px; }
+.beat-check-body { overflow: auto; min-height: 0; }
 .beat-check-card h2 { font-size: 22px; margin: 4px 0 0; }
 .beat-check-readout { display: flex; align-items: center; gap: 16px; margin: 18px 0; }
 .beat-ring { width: 168px; height: 168px; flex-shrink: 0; }
