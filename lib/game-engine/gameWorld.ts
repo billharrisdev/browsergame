@@ -5,6 +5,7 @@ export interface BeatTarget {
   id: number; time: number; x: number; y: number; resolved: boolean
   hand: Stick | null; pattern: 'Pulse' | 'Alternating' | 'Paradiddle' | 'Free' | 'Swing'; step: number; window: number
   timedOut?: boolean; comboBeforeMiss?: number
+  best?: { time: number; hand: Stick | null; error: number }
 }
 export interface HitResult {
   grade: Judgment; timing?: Judgment; errorMs: number | null; x: number; y: number; time: number; targetId?: number
@@ -59,6 +60,7 @@ export class GameWorld {
   readonly stats = new RunScore()
   feedback: HitResult[] = []
   lastHit: HitResult | null = null
+  readonly performance: { time: number; hand: Stick | null; x: number; y: number }[] = []
   cursor = 0
   active: BeatTarget[] = []
   constructor(map: BeatMap, duration: number, readonly difficulty: string) {
@@ -66,17 +68,12 @@ export class GameWorld {
   }
 
   nextTarget(time: number) {
-    return this.targets.find(target => (!target.resolved || (target.timedOut && Math.abs(time - target.time) <= target.window)) && target.time + target.window >= time)
+    return this.targets.find(target => !target.resolved && target.time + target.window + 1e-7 >= time)
   }
 
   update(time: number) {
     this.spawn(time)
-    for (const target of this.active) {
-      if (!target.resolved && time > target.time + target.window + 1e-7) {
-        target.timedOut = true; target.comboBeforeMiss = this.stats.combo; target.resolved = true
-        this.record({ grade: 'Miss', errorMs: null, x: target.x, y: target.y, time, targetId: target.id, expectedHand: target.hand })
-      }
-    }
+    for (const target of this.active) this.close(target, time)
     this.active = this.active.filter(target => !target.resolved)
     this.feedback = this.feedback.filter(hit => time - hit.time < 0.85).slice(-5)
   }
@@ -87,35 +84,86 @@ export class GameWorld {
 
   strike(hand: Stick, time: number): HitResult {
     this.spawn(time)
-    const target = this.nextTarget(time)
-    if (!target || target.time > time + approachTime(this.difficulty)) return this.record({ grade: 'No target', errorMs: null, x: 0.5, y: 0.5, time, actualHand: hand })
-    return this.judge(target, hand, time)
+    this.performance.push({ time, hand, x: 0.5, y: 0.5 })
+    const target = this.noteAt(time)
+    if (!target) return this.unscored(hand, time, 0.5, 0.5)
+    return this.consider(target, hand, time, 0.5, 0.5)
   }
 
   hit(x: number, y: number, time: number, width: number, height: number, radius: number, hand: Stick | null = null): HitResult {
     this.spawn(time)
-    const recoverable = this.targets.filter(target => target.timedOut && Math.abs(time - target.time) <= target.window)
-    const candidates = [...this.active, ...recoverable].filter(target => (!target.resolved || target.timedOut)
-      && Math.hypot((target.x - x) * width, (target.y - y) * height) <= radius)
-    const target = candidates.sort((a, b) => Math.abs(a.time - time) - Math.abs(b.time - time))[0]
-    if (!target) return this.record({ grade: 'No target', errorMs: null, x, y, time, actualHand: hand })
-    return this.judge(target, hand, time)
+    this.performance.push({ time, hand, x, y })
+    const target = this.padAt(x, y, time, width, height, radius)
+    if (!target) return this.unscored(hand, time, x, y)
+    return this.consider(target, hand, time, x, y)
   }
 
-  private judge(target: BeatTarget, hand: Stick | null, time: number) {
+  private noteAt(time: number) {
+    return this.openAt(time)[0]
+  }
+
+  private padAt(x: number, y: number, time: number, width: number, height: number, radius: number) {
+    return this.openAt(time).filter(target => Math.hypot((target.x - x) * width, (target.y - y) * height) <= radius)[0]
+  }
+
+  private openAt(time: number) {
+    return this.targets.filter(target => (!target.resolved || target.timedOut) && Math.abs(time - target.time) <= target.window + 1e-7)
+      .sort((a, b) => Math.abs(a.time - time) - Math.abs(b.time - time))
+  }
+
+  private consider(target: BeatTarget, hand: Stick | null, time: number, x: number, y: number) {
     const error = time - target.time
+    if (target.best && Math.abs(error) >= Math.abs(target.best.error) - 1e-9) return this.unscored(hand, time, x, y)
+    if (target.best) this.stats.stray++
+    const recovering = !!target.timedOut
+    if (recovering) this.undoMiss(target)
+    target.best = { time, hand, error }
+    const shown = this.preview(target, hand, time)
+    if (recovering) { target.resolved = true; this.commit(target) }
+    return shown
+  }
+
+  private preview(target: BeatTarget, hand: Stick | null, time: number) {
+    const error = time - target.time
+    const { grade, timing } = this.gradeFor(target, hand, error)
+    const hit: HitResult = { grade, timing, errorMs: Math.round(error * 1000), x: target.x, y: target.y, time, targetId: target.id, expectedHand: target.hand, actualHand: hand }
+    this.feedback = this.feedback.filter(item => item.targetId !== target.id)
+    this.feedback.push(hit); this.lastHit = hit
+    return hit
+  }
+
+  private commit(target: BeatTarget) {
+    const best = target.best
+    if (!best) return
+    const { grade, timing } = this.gradeFor(target, best.hand, best.error)
+    this.stats.record(grade, Math.round(best.error * 1000), timing, target.hand, best.hand)
+  }
+
+  private gradeFor(target: BeatTarget, hand: Stick | null, error: number) {
     const timing = timingGrade(error, target.window)
-    if (target.timedOut) {
-      this.stats.counts.Miss--
-      if (this.lastHit?.targetId === target.id && this.lastHit.grade === 'Miss') this.stats.combo = target.comboBeforeMiss || 0
-      this.feedback = this.feedback.filter(hit => hit.targetId !== target.id)
-      target.timedOut = false
-    }
-    if (timing !== 'Too early') target.resolved = true
     const accepted = !['Too early', 'Miss'].includes(timing)
     const grade = accepted && target.hand && target.hand !== hand ? 'Wrong stick' : timing
-    return this.record({ grade, timing, errorMs: timing === 'Miss' ? null : Math.round(error * 1000),
-      x: target.x, y: target.y, time, targetId: target.id, expectedHand: target.hand, actualHand: hand })
+    return { grade, timing }
+  }
+
+  private close(target: BeatTarget, time: number) {
+    if (target.resolved || time <= target.time + target.window + 1e-7) return
+    target.resolved = true
+    if (target.best) { this.commit(target); return }
+    target.timedOut = true; target.comboBeforeMiss = this.stats.combo
+    this.record({ grade: 'Miss', errorMs: null, x: target.x, y: target.y, time, targetId: target.id, expectedHand: target.hand })
+  }
+
+  private undoMiss(target: BeatTarget) {
+    if (this.stats.counts.Miss > 0) this.stats.counts.Miss--
+    const later = this.targets.some(other => other.id !== target.id && other.resolved && !other.timedOut && other.time >= target.time)
+    if (!later) this.stats.combo = target.comboBeforeMiss || 0
+    this.feedback = this.feedback.filter(hit => hit.targetId !== target.id)
+    target.timedOut = false; target.resolved = false
+  }
+
+  private unscored(hand: Stick | null, time: number, x: number, y: number) {
+    return this.record({ grade: 'No target', errorMs: null, x, y, time, actualHand: hand })
   }
 
   private record(hit: HitResult): HitResult {
@@ -126,7 +174,10 @@ export class GameWorld {
 
   finish(time: number) {
     for (const target of this.targets) {
-      if (!target.resolved) { target.resolved = true; this.record({ grade: 'Miss', errorMs: null, x: target.x, y: target.y, time, targetId: target.id, expectedHand: target.hand }) }
+      if (target.resolved) continue
+      target.resolved = true
+      if (target.best) this.commit(target)
+      else this.record({ grade: 'Miss', errorMs: null, x: target.x, y: target.y, time, targetId: target.id, expectedHand: target.hand })
     }
     this.active = []
   }
