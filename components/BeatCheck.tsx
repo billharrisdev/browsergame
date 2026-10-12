@@ -160,7 +160,13 @@ export default function BeatCheck({ track, onClose }: { track: Track; onClose: (
   }, [grid, nudge, click])
 
   useEffect(() => {
-    gridRef.current?.querySelector('.is-now')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    const grid = gridRef.current
+    const cell = grid?.querySelector('.is-now')
+    if (!grid || !(cell instanceof HTMLElement)) return
+    const top = cell.offsetTop - grid.offsetTop
+    const bottom = top + cell.offsetHeight
+    if (top < grid.scrollTop) grid.scrollTop = top
+    else if (bottom > grid.scrollTop + grid.clientHeight) grid.scrollTop = bottom - grid.clientHeight
   }, [beat])
 
   const seek = (next: number) => {
